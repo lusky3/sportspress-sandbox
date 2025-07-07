@@ -1,0 +1,18 @@
+services:
+  sportspress-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8081:80"
+      - "3306:3306"
+    volumes:
+      - ../:/var/www/html/wp-content/plugins/sportspress-player-merge
+    tmpfs:
+      - /dev/shm:size=100m
+    environment:
+      - WORDPRESS_DB_HOST=localhost
+      - WORDPRESS_DB_USER=wordpress
+      - WORDPRESS_DB_PASSWORD=wordpress
+      - WORDPRESS_DB_NAME=wordpress
+      - SPORTSPRESS_SPORT=ice-hockey

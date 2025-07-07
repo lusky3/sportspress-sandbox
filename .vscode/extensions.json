@@ -1,0 +1,8 @@
+{
+    "recommendations": [
+        "timonwong.shellcheck",
+        "foxundermoon.shell-format",
+        "github.vscode-github-actions",
+        "ms-vscode-remote.remote-containers"
+    ]
+}
