@@ -36,6 +36,11 @@ jobs:
           type=ref,event=branch
           type=ref,event=pr
           type=sha
+        labels: |
+          org.opencontainers.image.title=SportsPress Test Environment
+          org.opencontainers.image.description=Complete WordPress + SportsPress test environment with automated sample data
+          org.opencontainers.image.vendor=${{ github.repository_owner }}
+          org.opencontainers.image.licenses=GPL-2.0
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
