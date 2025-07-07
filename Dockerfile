@@ -36,9 +36,6 @@ COPY config/php/php-fpm.conf /usr/local/etc/php-fpm.d/www.conf
 # Create tmpfs mount point for temporary files
 RUN mkdir -p /dev/shm && chmod 1777 /dev/shm
 
-# Copy SportsPress plugin and our merge plugin
-COPY plugins/ /var/www/html/wp-content/plugins/
-
 # Copy setup script
 COPY config/scripts/setup-test-data.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/setup-test-data.sh

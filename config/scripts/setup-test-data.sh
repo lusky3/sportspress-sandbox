@@ -76,7 +76,14 @@ SPORT=${SPORTSPRESS_SPORT:-ice-hockey}
 
 # Validate sport selection
 VALID_SPORTS=("soccer" "american-football" "australian-football" "baseball" "basketball" "cricket" "floorball" "football" "handball" "ice-hockey" "netball" "rugby-league" "rugby-union" "volleyball")
-if [[ ! " ${VALID_SPORTS[@]} " =~ " ${SPORT} " ]]; then
+SPORT_VALID=0
+for valid in "${VALID_SPORTS[@]}"; do
+    if [[ "$SPORT" == "$valid" ]]; then
+        SPORT_VALID=1
+        break
+    fi
+done
+if [[ $SPORT_VALID -eq 0 ]]; then
     echo "❌ Invalid sport: $SPORT"
     echo "Valid sports: ${VALID_SPORTS[*]}"
     echo "Defaulting to ice-hockey"
