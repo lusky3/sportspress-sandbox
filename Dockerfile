@@ -14,6 +14,9 @@ RUN wget https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.ph
     && chmod +x wp-cli.phar \
     && mv wp-cli.phar /usr/local/bin/wp
 
+# Install unzip for plugin extraction
+RUN apk add --no-cache unzip
+
 # Configure MariaDB with performance optimizations
 RUN mkdir -p /run/mysqld \
     && chown -R mysql:mysql /run/mysqld \
@@ -24,6 +27,12 @@ RUN cp -r /usr/src/wordpress/* /var/www/html/ \
     && mkdir -p /var/www/html/wp-content/plugins \
     && mkdir -p /var/www/html/wp-content/themes \
     && mkdir -p /var/www/html/wp-content/uploads
+
+# Download and install SportsPress plugin
+RUN cd /tmp \
+    && wget https://downloads.wordpress.org/plugin/sportspress.2.7.24.zip \
+    && unzip sportspress.2.7.24.zip -d /var/www/html/wp-content/plugins/ \
+    && rm sportspress.2.7.24.zip
 
 # Copy configuration files from organized directories
 COPY config/wordpress/wp-config.php /var/www/html/

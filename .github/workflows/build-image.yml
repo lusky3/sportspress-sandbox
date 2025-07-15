@@ -36,6 +36,7 @@ jobs:
           type=ref,event=branch
           type=ref,event=pr
           type=sha
+          type=raw,value=latest,enable={{is_default_branch}}
         labels: |
           org.opencontainers.image.title=SportsPress Test Environment
           org.opencontainers.image.description=Complete WordPress + SportsPress test environment with automated sample data

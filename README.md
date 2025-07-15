@@ -6,7 +6,7 @@ Complete WordPress + SportsPress test environment with automated sample data ins
 
 ```bash
 # Build and run
-docker build -f Dockerfile.testenv -t sportspress-test-env .
+docker build -f Dockerfile -t sportspress-test-env .
 docker run -p 8082:80 sportspress-test-env
 
 # Or use docker-compose
