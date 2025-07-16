@@ -20,7 +20,15 @@ jobs:
       id: wordpress
       run: |
         CURRENT=$(grep "FROM wordpress:" Dockerfile | cut -d: -f2)
-        LATEST=$(curl -s "https://registry.hub.docker.com/v2/repositories/library/wordpress/tags/?page_size=100" | jq -r '.results[] | select(.name | test("^[0-9]+\\.[0-9]+\\.[0-9]+-php[0-9]+\\.[0-9]+-fvm-alpine$")) | .name' | sort -V | tail -1)
+        LATEST=$(curl -s "https://registry.hub.docker.com/v2/repositories/library/wordpress/tags/?page_size=100" | jq -r '.results[] | select(.name | test("^[0-9]+\\.[0-9]+\\.[0-9]+-php[0-9]+\\.[0-9]+-fpm-alpine$")) | .name' | sort -V | tail -1)
+        
+        # Validate versions are not empty
+        if [ -z "$CURRENT" ] || [ -z "$LATEST" ]; then
+          echo "Error: Failed to detect WordPress versions"
+          echo "Current: '$CURRENT', Latest: '$LATEST'"
+          exit 1
+        fi
+        
         {
           echo "current<<EOF"
           echo "${CURRENT}"
@@ -29,15 +37,24 @@ jobs:
           echo "${LATEST}"
           echo "EOF"
         } >> $GITHUB_OUTPUT
-        if [ "$CURRENT" != "$LATEST" ]; then
+        
+        if [ "$CURRENT" != "$LATEST" ] && [ -n "$CURRENT" ] && [ -n "$LATEST" ]; then
           echo "update_needed=true" >> $GITHUB_OUTPUT
         fi
 
     - name: Check SportsPress plugin updates
       id: sportspress
       run: |
-        CURRENT=$(grep "sportspress\." Dockerfile | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+")
+        CURRENT=$(grep "sportspress\." Dockerfile | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+" | head -1)
         LATEST=$(curl -s "https://api.wordpress.org/plugins/info/1.0/sportspress.json" | jq -r '.version')
+        
+        # Validate versions are not empty
+        if [ -z "$CURRENT" ] || [ -z "$LATEST" ]; then
+          echo "Error: Failed to detect SportsPress versions"
+          echo "Current: '$CURRENT', Latest: '$LATEST'"
+          exit 1
+        fi
+        
         {
           echo "current<<EOF"
           echo "${CURRENT}"
@@ -46,7 +63,8 @@ jobs:
           echo "${LATEST}"
           echo "EOF"
         } >> $GITHUB_OUTPUT
-        if [ "$CURRENT" != "$LATEST" ]; then
+        
+        if [ "$CURRENT" != "$LATEST" ] && [ -n "$CURRENT" ] && [ -n "$LATEST" ]; then
           echo "update_needed=true" >> $GITHUB_OUTPUT
         fi
 
@@ -54,10 +72,22 @@ jobs:
       if: steps.wordpress.outputs.update_needed == 'true' || steps.sportspress.outputs.update_needed == 'true'
       run: |
         if [ "${{ steps.wordpress.outputs.update_needed }}" == "true" ]; then
-          sed -i "s/FROM wordpress:.*/FROM wordpress:${{ steps.wordpress.outputs.latest }}/" Dockerfile
+          if [ -n "${{ steps.wordpress.outputs.latest }}" ]; then
+            echo "Updating WordPress from ${{ steps.wordpress.outputs.current }} to ${{ steps.wordpress.outputs.latest }}"
+            sed -i "s/FROM wordpress:.*/FROM wordpress:${{ steps.wordpress.outputs.latest }}/" Dockerfile
+          else
+            echo "Error: WordPress latest version is empty"
+            exit 1
+          fi
         fi
         if [ "${{ steps.sportspress.outputs.update_needed }}" == "true" ]; then
-          sed -i "s/sportspress\.[0-9]\+\.[0-9]\+\.[0-9]\+/sportspress.${{ steps.sportspress.outputs.latest }}/g" Dockerfile
+          if [ -n "${{ steps.sportspress.outputs.latest }}" ]; then
+            echo "Updating SportsPress from ${{ steps.sportspress.outputs.current }} to ${{ steps.sportspress.outputs.latest }}"
+            sed -i "s/sportspress\.[0-9]\+\.[0-9]\+\.[0-9]\+/sportspress.${{ steps.sportspress.outputs.latest }}/g" Dockerfile
+          else
+            echo "Error: SportsPress latest version is empty"
+            exit 1
+          fi
         fi
 
     - name: Create Pull Request
