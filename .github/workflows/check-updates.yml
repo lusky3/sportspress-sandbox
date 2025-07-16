@@ -20,8 +20,8 @@ jobs:
       run: |
         CURRENT=$(grep "FROM wordpress:" Dockerfile | cut -d: -f2)
         LATEST=$(curl -s "https://registry.hub.docker.com/v2/repositories/library/wordpress/tags/?page_size=100" | jq -r '.results[] | select(.name | test("^[0-9]+\\.[0-9]+\\.[0-9]+-php[0-9]+\\.[0-9]+-fpm-alpine$")) | .name' | sort -V | tail -1)
-        echo "current=$CURRENT" >> $GITHUB_OUTPUT
-        echo "latest=$LATEST" >> $GITHUB_OUTPUT
+        echo "current=${CURRENT}" >> $GITHUB_OUTPUT
+        echo "latest=${LATEST}" >> $GITHUB_OUTPUT
         if [ "$CURRENT" != "$LATEST" ]; then
           echo "update_needed=true" >> $GITHUB_OUTPUT
         fi
@@ -31,8 +31,8 @@ jobs:
       run: |
         CURRENT=$(grep "sportspress\." Dockerfile | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+")
         LATEST=$(curl -s "https://api.wordpress.org/plugins/info/1.0/sportspress.json" | jq -r '.version')
-        echo "current=$CURRENT" >> $GITHUB_OUTPUT
-        echo "latest=$LATEST" >> $GITHUB_OUTPUT
+        echo "current=${CURRENT}" >> $GITHUB_OUTPUT
+        echo "latest=${LATEST}" >> $GITHUB_OUTPUT
         if [ "$CURRENT" != "$LATEST" ]; then
           echo "update_needed=true" >> $GITHUB_OUTPUT
         fi
