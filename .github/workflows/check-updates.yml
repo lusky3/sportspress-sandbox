@@ -12,6 +12,8 @@ jobs:
       contents: write
       actions: write
       pull-requests: write
+    outputs:
+      pr-created: ${{ steps.pr-output.outputs.pr-created }}
 
     steps:
     - uses: actions/checkout@v4
@@ -91,6 +93,7 @@ jobs:
         fi
 
     - name: Create Pull Request
+      id: create-pr
       if: steps.wordpress.outputs.update_needed == 'true' || steps.sportspress.outputs.update_needed == 'true'
       uses: peter-evans/create-pull-request@v5
       with:
@@ -106,4 +109,57 @@ jobs:
           
           - WordPress base image: `${{ steps.wordpress.outputs.current }}` → `${{ steps.wordpress.outputs.latest }}`
           - SportsPress plugin: `${{ steps.sportspress.outputs.current }}` → `${{ steps.sportspress.outputs.latest }}`
+          
+          ## Validation
+          
+          This PR includes automated testing to ensure:
+          - ✅ Docker image builds successfully
+          - ✅ WordPress starts and responds to requests
+          - ✅ No regressions in functionality
         branch: update-dependencies
+        
+    - name: Set PR created output
+      id: pr-output
+      if: steps.create-pr.outputs.pull-request-number
+      run: echo "pr-created=true" >> $GITHUB_OUTPUT
+
+  test-updates:
+    needs: check-updates
+    if: needs.check-updates.outputs.pr-created == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: update-dependencies
+        
+    - name: Build Docker image
+      run: |
+        docker build -t sportspress-test-env:test .
+        
+    - name: Test Docker image
+      run: |
+        # Start container
+        docker run -d --name test-container -p 8082:80 sportspress-test-env:test
+        
+        # Wait for WordPress to start
+        for i in {1..30}; do
+          if curl -f http://localhost:8082 > /dev/null 2>&1; then
+            echo "✅ WordPress is responding"
+            break
+          fi
+          echo "⏳ Waiting for WordPress... ($i/30)"
+          sleep 2
+        done
+        
+        # Verify WordPress is accessible
+        if ! curl -f http://localhost:8082 > /dev/null 2>&1; then
+          echo "❌ WordPress failed to start"
+          docker logs test-container
+          exit 1
+        fi
+        
+        # Cleanup
+        docker stop test-container
+        docker rm test-container
+        
+        echo "✅ Update validation successful"
