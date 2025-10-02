@@ -1,4 +1,4 @@
-FROM wordpress:6.8.2-php8.4-fpm-alpine
+FROM wordpress:6.8.3-php8.4-fpm-alpine
 
 # Install MariaDB, wp-cli, nginx, and supervisord for process management
 RUN apk add --no-cache \
