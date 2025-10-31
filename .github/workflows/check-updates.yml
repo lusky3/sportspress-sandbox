@@ -21,9 +21,21 @@ jobs:
     - name: Check WordPress base image updates
       id: wordpress
       run: |
+        # Extract current WordPress image tag from Dockerfile
         CURRENT=$(grep "FROM wordpress:" Dockerfile | cut -d: -f2)
-        LATEST=$(curl -s "https://registry.hub.docker.com/v2/repositories/library/wordpress/tags/?page_size=100" | jq -r '.results[] | select(.name | test("^[0-9]+\\.[0-9]+\\.[0-9]+-php[0-9]+\\.[0-9]+-fpm-alpine$")) | .name' | sort -V | tail -1)
-        
+
+        echo "Current WordPress tag: $CURRENT"
+
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq skopeo jq
+
+        # Fetch all WordPress tags using Skopeo
+        LATEST=$(skopeo list-tags docker://docker.io/library/wordpress \
+          | jq -r '.Tags[]' \
+          | grep -E '^[0-9]+\.[0-9]+\.[0-9]+-php[0-9]+\.[0-9]+-fpm-alpine$' \
+          | sort -Vr \
+          | head -n 1)
+
         # Validate versions are not empty
         if [ -z "$CURRENT" ] || [ -z "$LATEST" ]; then
           echo "Error: Failed to detect WordPress versions"
