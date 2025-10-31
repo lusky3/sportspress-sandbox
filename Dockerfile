@@ -30,9 +30,9 @@ RUN cp -r /usr/src/wordpress/* /var/www/html/ \
 
 # Download and install SportsPress plugin
 RUN cd /tmp \
-    && wget https://downloads.wordpress.org/plugin/sportspress.2.7.24.zip \
-    && unzip sportspress.2.7.24.zip -d /var/www/html/wp-content/plugins/ \
-    && rm sportspress.2.7.24.zip
+    && wget https://downloads.wordpress.org/plugin/sportspress.2.7.26.zip \
+    && unzip sportspress.2.7.26.zip -d /var/www/html/wp-content/plugins/ \
+    && rm sportspress.2.7.26.zip
 
 # Copy configuration files from organized directories
 COPY config/wordpress/wp-config.php /var/www/html/
