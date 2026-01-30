@@ -1,4 +1,4 @@
-FROM wordpress:6.8.3-php8.4-fpm-alpine
+FROM wordpress:6.9.0-php8.5-fpm-alpine
 
 # Install MariaDB, wp-cli, nginx, and supervisord for process management
 RUN apk add --no-cache \
@@ -30,9 +30,9 @@ RUN cp -r /usr/src/wordpress/* /var/www/html/ \
 
 # Download and install SportsPress plugin
 RUN cd /tmp \
-    && wget https://downloads.wordpress.org/plugin/sportspress.2.7.26.zip \
-    && unzip sportspress.2.7.26.zip -d /var/www/html/wp-content/plugins/ \
-    && rm sportspress.2.7.26.zip
+    && wget https://downloads.wordpress.org/plugin/sportspress.null.zip \
+    && unzip sportspress.null.zip -d /var/www/html/wp-content/plugins/ \
+    && rm sportspress.null.zip
 
 # Copy configuration files from organized directories
 COPY config/wordpress/wp-config.php /var/www/html/
