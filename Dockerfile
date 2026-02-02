@@ -7,7 +7,16 @@ RUN apk add --no-cache \
     mariadb-client \
     nginx \
     supervisor \
-    bash
+    bash \
+    git \
+    composer \
+    py3-pip \
+    $PHPIZE_DEPS \
+    linux-headers \
+    && pip3 install "setuptools==69.5.1" --break-system-packages \
+    && pecl install xdebug \
+    && docker-php-ext-enable xdebug \
+    && apk del $PHPIZE_DEPS linux-headers
 
 # Install wp-cli
 RUN wget https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar \
@@ -28,26 +37,49 @@ RUN cp -r /usr/src/wordpress/* /var/www/html/ \
     && mkdir -p /var/www/html/wp-content/themes \
     && mkdir -p /var/www/html/wp-content/uploads
 
-# Download and install SportsPress plugin
+# Download and install SportsPress plugin and dev tools
 RUN cd /tmp \
     && wget https://downloads.wordpress.org/plugin/sportspress.2.7.26.zip -O sportspress.zip \
     && unzip sportspress.zip -d /var/www/html/wp-content/plugins/ \
-    && rm sportspress.zip
+    && rm sportspress.zip \
+    && wget https://downloads.wordpress.org/plugin/user-switching.zip \
+    && unzip user-switching.zip -d /var/www/html/wp-content/plugins/ \
+    && rm user-switching.zip \
+    && wget https://downloads.wordpress.org/plugin/query-monitor.zip \
+    && unzip query-monitor.zip -d /var/www/html/wp-content/plugins/ \
+    && rm query-monitor.zip \
+    && wget https://downloads.wordpress.org/plugin/debug-bar.zip \
+    && unzip debug-bar.zip -d /var/www/html/wp-content/plugins/ \
+    && rm debug-bar.zip \
+    && wget https://github.com/Automattic/wordpress-mcp/archive/refs/heads/trunk.zip -O wordpress-mcp.zip \
+    && unzip wordpress-mcp.zip -d /var/www/html/wp-content/plugins/ \
+    && mv /var/www/html/wp-content/plugins/wordpress-mcp-trunk /var/www/html/wp-content/plugins/wordpress-mcp \
+    && rm wordpress-mcp.zip \
+    && wget https://github.com/WordPress/abilities-api/archive/refs/heads/trunk.zip -O abilities-api.zip \
+    && unzip abilities-api.zip -d /var/www/html/wp-content/plugins/ \
+    && mv /var/www/html/wp-content/plugins/abilities-api-trunk /var/www/html/wp-content/plugins/abilities-api \
+    && rm abilities-api.zip
 
 # Copy configuration files from organized directories
 COPY config/wordpress/wp-config.php /var/www/html/
+COPY config/wordpress/mu-plugins/ /var/www/html/wp-content/mu-plugins/
 COPY config/supervisor/supervisord.conf /etc/supervisord.conf
+COPY config/supervisor/conf.d /etc/supervisor/conf.d
 COPY config/mariadb/init-db.sql /docker-entrypoint-initdb.d/
 COPY config/mariadb/my.cnf /etc/my.cnf.d/99-test-optimizations.cnf
 COPY config/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY config/php/php-fpm.conf /usr/local/etc/php-fpm.d/www.conf
+COPY config/php/xdebug.ini /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+COPY config/php/mailhog.ini /usr/local/etc/php/conf.d/mailhog.ini
 
 # Create tmpfs mount point for temporary files
 RUN mkdir -p /dev/shm && chmod 1777 /dev/shm
 
 # Copy setup script
 COPY config/scripts/setup-test-data.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/setup-test-data.sh
+COPY config/scripts/start.sh /usr/local/bin/
+COPY config/scripts/generate-extra-data.php /usr/local/bin/
+RUN chmod +x /usr/local/bin/setup-test-data.sh /usr/local/bin/start.sh
 
 # Create necessary directories and set proper permissions
 RUN mkdir -p /var/log/nginx /var/lib/nginx/tmp \
@@ -64,4 +96,4 @@ ENV SPORTSPRESS_SPORT=ice-hockey
 EXPOSE 80 3306
 
 # Use supervisord to manage nginx, php-fpm, and MariaDB
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
+CMD ["/usr/local/bin/start.sh"]

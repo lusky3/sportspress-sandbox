@@ -5,20 +5,33 @@ set -e
 
 echo "🏗️ Setting up WordPress and SportsPress test data..."
 
-# Wait for MariaDB to start via supervisord
-echo "Waiting for database to be ready..."
+DB_HOST=${WORDPRESS_DB_HOST:-localhost}
+DB_USER=${WORDPRESS_DB_USER:-wordpress}
+DB_PASSWORD=${WORDPRESS_DB_PASSWORD:-wordpress}
+
+# Wait for database
+echo "Waiting for database at $DB_HOST..."
 for i in {1..30}; do
-    if mysqladmin ping -h"localhost" --silent 2>/dev/null; then
-        echo "Database is ready"
-        break
+    if [[ "$DB_HOST" == "localhost"* ]] || [[ "$DB_HOST" == "127.0.0.1"* ]]; then
+        if mysqladmin ping -h"localhost" --silent 2>/dev/null; then
+            echo "Database is ready"
+            break
+        fi
+    else
+        if mysqladmin ping -h"$DB_HOST" -u"$DB_USER" -p"$DB_PASSWORD" --silent 2>/dev/null; then
+            echo "Database is ready"
+            break
+        fi
     fi
     echo "Attempt $i/30: Database not ready yet..."
     sleep 2
 done
 
-# Initialize database
-echo "Initializing database..."
-mysql -e "$(cat /docker-entrypoint-initdb.d/init-db.sql)" 2>/dev/null || echo "Database already initialized"
+# Initialize database (only for internal)
+if [[ "$DB_HOST" == "localhost"* ]] || [[ "$DB_HOST" == "127.0.0.1"* ]]; then
+    echo "Initializing internal database..."
+    mysql -e "$(cat /docker-entrypoint-initdb.d/init-db.sql)" 2>/dev/null || echo "Database already initialized"
+fi
 
 # Install WordPress
 wp core install \
@@ -52,7 +65,7 @@ echo "Checking for additional plugins to activate..."
 for plugin_dir in /var/www/html/wp-content/plugins/*/; do
     if [ -d "$plugin_dir" ]; then
         plugin_name=$(basename "$plugin_dir")
-        if [ "$plugin_name" != "sportspress" ] && [ "$plugin_name" != "index.php" ]; then
+        if [ "$plugin_name" != "sportspress" ] && [ "$plugin_name" != "index.php" ] && [ "$plugin_name" != "wordpress-mcp" ] && [ "$plugin_name" != "abilities-api" ]; then
             echo "Found plugin: $plugin_name"
             wp plugin activate "$plugin_name" --allow-root 2>/dev/null && echo "✅ Activated $plugin_name" || echo "⚠️ Could not activate $plugin_name"
         fi
@@ -105,6 +118,11 @@ if (class_exists('SP_Admin_Sample_Data')) {
 }
 " --allow-root
 echo "✅ SportsPress sample data installation completed for $SPORT"
+
+# Generate extra SportsPress data (Teams, Players, Leagues, Seasons, etc.)
+echo "Generating extra SportsPress data..."
+wp eval-file /usr/local/bin/generate-extra-data.php --allow-root
+echo "✅ Extra SportsPress data generated"
 
 # Complete SportsPress setup to skip onboarding
 echo "Completing SportsPress setup..."
