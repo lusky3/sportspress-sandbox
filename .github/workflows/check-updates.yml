@@ -36,8 +36,8 @@ jobs:
           | sort -Vr \
           | head -n 1)
 
-        # Validate versions are not empty
-        if [ -z "$CURRENT" ] || [ -z "$LATEST" ]; then
+        # Validate versions are not empty or null
+        if [ -z "$CURRENT" ] || [ -z "$LATEST" ] || [ "$LATEST" = "null" ]; then
           echo "Error: Failed to detect WordPress versions"
           echo "Current: '$CURRENT', Latest: '$LATEST'"
           exit 1
@@ -62,10 +62,11 @@ jobs:
         CURRENT=$(grep "sportspress\." Dockerfile | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+" | head -1)
         LATEST=$(curl -s "https://api.wordpress.org/plugins/info/1.0/sportspress.json" | jq -r '.version')
         
-        # Validate versions are not empty
-        if [ -z "$CURRENT" ] || [ -z "$LATEST" ]; then
+        # Validate versions are not empty or null (API may return null when repo is temporarily closed)
+        if [ -z "$CURRENT" ] || [ -z "$LATEST" ] || [ "$LATEST" = "null" ]; then
           echo "Error: Failed to detect SportsPress versions"
           echo "Current: '$CURRENT', Latest: '$LATEST'"
+          echo "Note: WordPress.org API may be temporarily unavailable"
           exit 1
         fi
         
@@ -86,20 +87,20 @@ jobs:
       if: steps.wordpress.outputs.update_needed == 'true' || steps.sportspress.outputs.update_needed == 'true'
       run: |
         if [ "${{ steps.wordpress.outputs.update_needed }}" == "true" ]; then
-          if [ -n "${{ steps.wordpress.outputs.latest }}" ]; then
+          if [ -n "${{ steps.wordpress.outputs.latest }}" ] && [ "${{ steps.wordpress.outputs.latest }}" != "null" ]; then
             echo "Updating WordPress from ${{ steps.wordpress.outputs.current }} to ${{ steps.wordpress.outputs.latest }}"
             sed -i "s/FROM wordpress:.*/FROM wordpress:${{ steps.wordpress.outputs.latest }}/" Dockerfile
           else
-            echo "Error: WordPress latest version is empty"
+            echo "Error: WordPress latest version is empty or null"
             exit 1
           fi
         fi
         if [ "${{ steps.sportspress.outputs.update_needed }}" == "true" ]; then
-          if [ -n "${{ steps.sportspress.outputs.latest }}" ]; then
+          if [ -n "${{ steps.sportspress.outputs.latest }}" ] && [ "${{ steps.sportspress.outputs.latest }}" != "null" ]; then
             echo "Updating SportsPress from ${{ steps.sportspress.outputs.current }} to ${{ steps.sportspress.outputs.latest }}"
             sed -i "s/sportspress\.[0-9]\+\.[0-9]\+\.[0-9]\+/sportspress.${{ steps.sportspress.outputs.latest }}/g" Dockerfile
           else
-            echo "Error: SportsPress latest version is empty"
+            echo "Error: SportsPress latest version is empty or null"
             exit 1
           fi
         fi
