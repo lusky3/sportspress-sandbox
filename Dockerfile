@@ -1,4 +1,4 @@
-FROM wordpress:6.9.1-php8.5-fpm-alpine
+FROM wordpress:6.9.4-php8.5-fpm-alpine
 
 # Install MariaDB, wp-cli, nginx, and supervisord for process management
 RUN apk add --no-cache \
@@ -39,7 +39,7 @@ RUN cp -r /usr/src/wordpress/* /var/www/html/ \
 
 # Download and install SportsPress plugin and dev tools
 RUN cd /tmp \
-    && wget https://downloads.wordpress.org/plugin/sportspress.2.7.27.zip -O sportspress.zip \
+    && wget https://downloads.wordpress.org/plugin/sportspress.2.7.29.zip -O sportspress.zip \
     && unzip sportspress.zip -d /var/www/html/wp-content/plugins/ \
     && rm sportspress.zip \
     && wget https://downloads.wordpress.org/plugin/user-switching.zip \
