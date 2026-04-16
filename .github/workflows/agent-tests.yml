@@ -1,0 +1,104 @@
+# LLM Agent Tests — Smoke-test the Docker Compose environment
+# Builds the WordPress + SportsPress stack, verifies health, and collects artifacts.
+name: Agent Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  agent-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      # ── Checkout repositories ──────────────────────────────────────────
+      # Primary repo (sportspress-sandbox)
+      - name: Checkout sportspress-sandbox
+        uses: actions/checkout@v4
+
+      # Sibling repo required by compose volume mount
+      - name: Checkout SportsPress-Admin-Tools
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/SportsPress-Admin-Tools
+          path: ../SportsPress-Admin-Tools
+
+      # ── Build & start environment ──────────────────────────────────────
+      - name: Build and start Docker Compose environment
+        run: docker compose up -d --build --wait
+        timeout-minutes: 10
+
+      # ── Wait for health endpoint ───────────────────────────────────────
+      - name: Wait for health endpoint
+        run: |
+          echo "Waiting for health endpoint..."
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8082/wp-json/test/v1/health; then
+              echo ""
+              echo "Health endpoint responded on attempt $i"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Health endpoint did not respond in time"
+          docker compose logs --tail=100
+          exit 1
+        timeout-minutes: 6
+
+      # ── Smoke tests ────────────────────────────────────────────────────
+      - name: Smoke test — health endpoint returns valid JSON
+        run: |
+          response=$(curl -sf http://localhost:8082/wp-json/test/v1/health)
+          echo "Health response: $response"
+          echo "$response" | python3 -c "import sys,json; json.load(sys.stdin)" \
+            || { echo "FAIL: health endpoint did not return valid JSON"; exit 1; }
+
+      - name: Smoke test — WordPress admin loads
+        run: |
+          status=$(curl -so /dev/null -w '%{http_code}' http://localhost:8082/wp-admin/)
+          echo "wp-admin status: $status"
+          if [ "$status" -lt 200 ] || [ "$status" -ge 400 ]; then
+            echo "FAIL: wp-admin returned HTTP $status"
+            exit 1
+          fi
+
+      # ── Collect artifacts from Docker volumes ──────────────────────────
+      - name: Collect screenshots and test results
+        if: always()
+        run: |
+          mkdir -p /tmp/artifacts/screenshots /tmp/artifacts/test-results
+          # Copy from named volumes via a helper container
+          docker run --rm \
+            -v sportspress-sandbox_screenshots:/src/screenshots:ro \
+            -v sportspress-sandbox_test-results:/src/test-results:ro \
+            -v /tmp/artifacts:/dst \
+            alpine sh -c "cp -r /src/screenshots/. /dst/screenshots/ 2>/dev/null; \
+                          cp -r /src/test-results/. /dst/test-results/ 2>/dev/null; \
+                          true"
+          echo "Collected artifacts:"
+          find /tmp/artifacts -type f || true
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: /tmp/artifacts/screenshots/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: /tmp/artifacts/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # ── Tear down ─────────────────────────────────────────────────────
+      - name: Tear down environment
+        if: always()
+        run: docker compose down -v --remove-orphans

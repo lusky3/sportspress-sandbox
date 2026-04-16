@@ -1,31 +1,94 @@
+# SportsPress Test Environment with LLM Agent Support
+# ===================================================
+# Provides WordPress + SportsPress + Playwright MCP for automated testing.
+#
+# Usage:
+#   docker compose up -d --wait    # Start all services, wait for healthy
+#   docker compose down             # Stop all services
+#
+# LLM Agent Connection:
+#   MCP Server:  http://localhost:3000/sse
+#   WordPress:   http://localhost:8082 (auto-login enabled)
+#   REST API:    http://localhost:8082/wp-json/test/v1/health
+#
+# The Playwright container connects to WordPress via the internal
+# Docker network at http://sportspress-test:80
+
 services:
+  # WordPress + SportsPress + MariaDB (all-in-one)
   sportspress-test:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8081:80"
+      - "8082:80"
       - "3306:3306"
     volumes:
-      - ../:/var/www/html/wp-content/plugins/sportspress-player-merge
+      # Mount the SportsPress Admin Tools plugin from sibling directory
+      - ../SportsPress-Admin-Tools:/var/www/html/wp-content/plugins/sportspress-admin-tools
+      # Persist screenshots and test results for review
+      - screenshots:/screenshots
+      - test-results:/test-results
     tmpfs:
-      - /dev/shm:size=100m
+      - /dev/shm:size=256m
     environment:
       - WORDPRESS_DB_HOST=localhost
       - WORDPRESS_DB_USER=wordpress
       - WORDPRESS_DB_PASSWORD=wordpress
       - WORDPRESS_DB_NAME=wordpress
       - SPORTSPRESS_SPORT=ice-hockey
-    links:
-      - mailhog
-      - adminer
+    networks:
+      - sp-test-net
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost/wp-json/test/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 90s
 
+  # Playwright MCP Server — browser automation for LLM agents
+  # Exposes an MCP-compatible SSE endpoint that agents connect to.
+  # Chromium runs inside this container and navigates to WordPress
+  # over the shared Docker network.
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.52.0-noble
+    depends_on:
+      sportspress-test:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    volumes:
+      - screenshots:/screenshots
+      - test-results:/test-results
+    environment:
+      - DISPLAY=:99
+    command: >
+      npx @playwright/mcp@0.0.70
+      --port 3000
+      --host 0.0.0.0
+    networks:
+      - sp-test-net
+
+  # Mailhog — captures outgoing emails for verification
   mailhog:
     image: mailhog/mailhog
     ports:
       - "8025:8025"
+    networks:
+      - sp-test-net
 
+  # Adminer — lightweight database management UI
   adminer:
     image: adminer
     ports:
       - "8080:8080"
+    networks:
+      - sp-test-net
+
+networks:
+  sp-test-net:
+    driver: bridge
+
+volumes:
+  screenshots:
+  test-results:
