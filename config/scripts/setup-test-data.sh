@@ -134,6 +134,12 @@ wp transient delete _sp_activation_redirect --allow-root 2>/dev/null || echo "No
 echo "✅ SportsPress $SPORT demo data installed!"
 echo "Demo includes: Teams, Players, Events, Statistics, and proper configurations"
 
+# Export database baseline for test state reset
+# Agents can restore this snapshot between test suites to ensure clean state.
+echo "Exporting database baseline snapshot..."
+wp db export /tmp/baseline.sql --allow-root
+echo "✅ Database baseline saved to /tmp/baseline.sql"
+
 # Keep the setup process running to prevent container exit
 echo "Setup completed, keeping process alive..."
 tail -f /dev/null
