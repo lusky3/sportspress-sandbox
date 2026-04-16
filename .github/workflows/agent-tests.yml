@@ -23,7 +23,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/SportsPress-Admin-Tools
-          path: ../SportsPress-Admin-Tools
+          path: SportsPress-Admin-Tools
+
+      # compose.yml mounts ../SportsPress-Admin-Tools — create symlink
+      - name: Create sibling directory symlink
+        run: ln -sf ${{ github.workspace }}/SportsPress-Admin-Tools ../SportsPress-Admin-Tools
 
       # ── Build & start environment ──────────────────────────────────────
       - name: Build and start Docker Compose environment
