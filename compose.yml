@@ -66,11 +66,11 @@ services:
     networks:
       - sp-test-net
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:3000/sse"]
+      test: ["CMD-SHELL", "curl -sf --max-time 2 http://localhost:3000/sse | grep -q sessionId"]
       interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
 
   # Mailpit — captures outgoing emails for verification
   mailpit:
