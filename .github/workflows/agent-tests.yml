@@ -18,16 +18,19 @@ jobs:
       - name: Checkout sportspress-sandbox
         uses: actions/checkout@v4
 
-      # Sibling repo required by compose volume mount
+      # Sibling repo required by compose volume mount (optional — private repo)
       - name: Checkout SportsPress-Admin-Tools
+        continue-on-error: true
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/SportsPress-Admin-Tools
           path: SportsPress-Admin-Tools
 
-      # compose.yml mounts ../SportsPress-Admin-Tools — create symlink
-      - name: Create sibling directory symlink
-        run: ln -sf ${{ github.workspace }}/SportsPress-Admin-Tools ../SportsPress-Admin-Tools
+      # compose.yml mounts ../SportsPress-Admin-Tools — create dir if checkout failed
+      - name: Ensure sibling directory exists
+        run: |
+          mkdir -p SportsPress-Admin-Tools
+          ln -sf ${{ github.workspace }}/SportsPress-Admin-Tools ../SportsPress-Admin-Tools
 
       # ── Build & start environment ──────────────────────────────────────
       - name: Build and start Docker Compose environment
