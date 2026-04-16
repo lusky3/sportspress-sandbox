@@ -5,7 +5,7 @@
 - Admin Tools Core tests (01-admin-tools-core.md) have passed.
 - SportsPress Admin Tools and Events Manager child plugin are active.
 - SportsPress has at least one league and one season configured.
-- Database is at baseline state. Restore if needed: `docker exec sportspress-test wp db import /tmp/baseline.sql --allow-root`
+- Database is at baseline state. Restore if needed: `docker exec sportspress-test wp db import /var/lib/baseline/baseline.sql --allow-root`
 - Verify prerequisite data: `docker exec sportspress-test wp post list --post_type=sp_league --format=table --allow-root`
 - Verify seasons exist: `docker exec sportspress-test wp post list --post_type=sp_season --format=table --allow-root`
 

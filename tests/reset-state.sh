@@ -4,7 +4,7 @@
 set -euo pipefail
 
 CONTAINER="sportspress-test"
-BASELINE="/tmp/baseline.sql"
+BASELINE="/var/lib/baseline/baseline.sql"
 
 # Run a WP-CLI command, routing through docker exec when on the host.
 wp_cmd() {

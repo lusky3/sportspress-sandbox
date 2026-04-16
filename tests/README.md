@@ -129,7 +129,7 @@ node tests/report-converter.js results/00-smoke.json report.xml
 
 ## Troubleshooting
 
-- **`baseline.sql not found`** — The container needs a baseline dump at `/tmp/baseline.sql`. Run `wp db export /tmp/baseline.sql --allow-root` inside the container after initial setup.
+- **`baseline.sql not found`** — The container needs a baseline dump at `/var/lib/baseline/baseline.sql`. Run `wp db export /var/lib/baseline/baseline.sql --allow-root` inside the container after initial setup.
 - **State reset fails** — Ensure the `sportspress-test` container is running: `docker compose ps`.
 - **No results JSON** — The LLM agent writes results asynchronously. Check that the agent completed its run and wrote to the correct results directory.
 - **Permission denied on scripts** — Run `chmod +x tests/reset-state.sh tests/run-suite.sh`.

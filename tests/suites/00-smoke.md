@@ -97,11 +97,11 @@
 **Type:** API
 
 **Steps:**
-1. Run: `docker exec sportspress-test ls -la /tmp/baseline.sql`
+1. Run: `docker exec sportspress-test ls -la /var/lib/baseline/baseline.sql`
 2. Confirm the file exists and has a non-zero size.
 
 **Expected Result:**
-- `/tmp/baseline.sql` exists inside the container.
+- `/var/lib/baseline/baseline.sql` exists inside the container.
 - File size is greater than 0 bytes.
 
 **Verification:**

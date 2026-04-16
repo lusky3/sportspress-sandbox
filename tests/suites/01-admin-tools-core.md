@@ -3,7 +3,7 @@
 ## Prerequisites
 - Smoke tests (00-smoke.md) have passed.
 - SportsPress Admin Tools plugin is active.
-- Database is at baseline state. Restore if needed: `docker exec sportspress-test wp db import /tmp/baseline.sql --allow-root`
+- Database is at baseline state. Restore if needed: `docker exec sportspress-test wp db import /var/lib/baseline/baseline.sql --allow-root`
 
 ## Test Cases
 

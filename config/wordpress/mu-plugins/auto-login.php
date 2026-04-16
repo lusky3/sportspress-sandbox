@@ -21,8 +21,8 @@ add_action('init', function() {
         return;
     }
 
-    // 4. Log in if not already
-    if (!is_user_logged_in()) {
+    // 4. Log in if not already (check cookie to avoid race)
+    if (!is_user_logged_in() && empty($_COOKIE[LOGGED_IN_COOKIE])) {
         wp_set_current_user($user->ID, $user->user_login);
         wp_set_auth_cookie($user->ID);
         do_action('wp_login', $user->user_login, $user);

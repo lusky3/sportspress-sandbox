@@ -10,10 +10,10 @@ docker compose up -d --build --wait
 
 # Access points:
 # WordPress:      http://localhost:8082       (auto-login enabled)
-# Playwright MCP: http://localhost:3000/sse   (LLM agent endpoint)
+# Playwright MCP: http://localhost:3002/sse   (LLM agent endpoint)
 # REST Health:    http://localhost:8082/wp-json/test/v1/health
-# Mailhog:        http://localhost:8025
-# Adminer:        http://localhost:8080
+# Mailpit:        http://localhost:8025
+# Adminer:        http://localhost:8088
 
 # Stop everything
 docker compose down -v
@@ -24,7 +24,7 @@ docker compose down -v
 ```text
 ┌─────────────────────────────────────────────────────┐
 │  LLM Agent (Kiro / Claude / GPT)                    │
-│  MCP: playwright @ localhost:3000/sse               │
+│  MCP: playwright @ localhost:3002/sse               │
 │  HTTP: REST API @ localhost:8082/wp-json/            │
 │  Shell: docker exec sportspress-test wp ...          │
 └──────────┬──────────────────┬───────────────────────┘
@@ -43,9 +43,9 @@ docker compose down -v
 | Service | Image | Port | Purpose |
 |---------|-------|------|---------|
 | sportspress-test | Custom (Alpine + WP) | 8082 | WordPress + SportsPress + MariaDB |
-| playwright | mcr.microsoft.com/playwright:v1.52.0-noble | 3000 | Browser automation MCP server |
-| mailhog | mailhog/mailhog | 8025 | Email capture |
-| adminer | adminer | 8080 | Database management |
+| playwright | Custom (Playwright v1.59.1 + Chrome) | 3002 | Browser automation MCP server |
+| mailpit | axllent/mailpit | 8025 | Email capture |
+| adminer | adminer | 8088 | Database management |
 
 ## LLM Agent Integration
 
@@ -57,7 +57,7 @@ Add the Playwright MCP server to your agent's MCP configuration:
 {
   "mcpServers": {
     "playwright": {
-      "url": "http://localhost:3000/sse"
+      "url": "http://localhost:3002/sse"
     }
   }
 }
@@ -101,7 +101,7 @@ Returns:
   "sportspress": "2.7.29",
   "sport": "ice-hockey",
   "plugins": ["sportspress", "sportspress-admin-tools", ...],
-  "theme": "developer",
+  "theme": "rookie",
   "timestamp": "2026-04-16T18:30:00+00:00"
 }
 ```
@@ -115,7 +115,7 @@ A baseline database snapshot is created during container setup. Reset between te
 ./tests/reset-state.sh
 
 # Or manually
-docker exec sportspress-test wp db import /tmp/baseline.sql --allow-root
+docker exec sportspress-test wp db import /var/lib/baseline/baseline.sql --allow-root
 docker exec sportspress-test wp cache flush --allow-root
 ```
 
@@ -164,7 +164,7 @@ See `tests/README.md` for the full JSON schema and writing guide.
 
 Set `SPORTSPRESS_SPORT` environment variable:
 
-- `soccer` (default), `basketball`, `baseball`, `ice-hockey`
+- `ice-hockey` (default), `soccer`, `basketball`, `baseball`
 - `american-football`, `rugby-league`, `rugby-union`, `volleyball`
 - `australian-football`, `cricket`, `floorball`, `football`
 - `handball`, `netball`
@@ -173,9 +173,10 @@ Set `SPORTSPRESS_SPORT` environment variable:
 
 - **Auto-Login** — Automatically logged in as admin (no credentials needed)
 - **Debug Tools** — Query Monitor, Debug Bar, and User Switching pre-installed
+- **Email Capture** — All outgoing email routed via SMTP to Mailpit for inspection
 - **MCP Server** — WordPress MCP Server plugin installed (inactive by default)
 - **Abilities API** — WordPress Abilities API plugin installed (inactive by default)
-- **DB Baseline** — Snapshot at `/tmp/baseline.sql` for state reset between tests
+- **DB Baseline** — Snapshot at `/var/lib/baseline/baseline.sql` for state reset between tests
 - **REST Health** — `/wp-json/test/v1/health` for readiness checks
 
 ## CI/CD
@@ -191,6 +192,7 @@ The `agent-tests.yml` workflow runs on push to main and pull requests:
 
 ```text
 ├── Dockerfile                          # WordPress + SportsPress container
+├── Dockerfile.playwright               # Playwright MCP + Chrome container
 ├── compose.yml                         # All services with Playwright MCP
 ├── config/
 │   ├── scripts/
@@ -201,6 +203,7 @@ The `agent-tests.yml` workflow runs on push to main and pull requests:
 │   │   ├── wp-config.php               # WordPress configuration
 │   │   └── mu-plugins/
 │   │       ├── auto-login.php          # Auto-login for testing
+│   │       ├── mail-config.php         # SMTP routing to Mailpit
 │   │       └── rest-api-health.php     # Health endpoint for agents
 │   ├── nginx/                          # Nginx configuration
 │   ├── php/                            # PHP-FPM + Xdebug configuration

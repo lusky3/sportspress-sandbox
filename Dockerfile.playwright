@@ -1,0 +1,16 @@
+FROM mcr.microsoft.com/playwright:v1.59.1-noble
+
+# Install Google Chrome (required by @playwright/mcp — it uses 'chrome' not 'chromium')
+RUN npx playwright install chrome
+
+# Install the MCP server package so startup is instant
+RUN npm install -g @playwright/mcp@0.0.70
+
+EXPOSE 3000
+
+CMD ["npx", "@playwright/mcp@0.0.70", \
+     "--port", "3000", \
+     "--host", "0.0.0.0", \
+     "--allowed-hosts", "*", \
+     "--headless", \
+     "--no-sandbox"]
