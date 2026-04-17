@@ -19,12 +19,12 @@ jobs:
       # ── Checkout repositories ──────────────────────────────────────────
       # Primary repo (sportspress-sandbox)
       - name: Checkout sportspress-sandbox
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       # Sibling repo required by compose volume mount (optional — private repo)
       - name: Checkout SportsPress-Admin-Tools
         continue-on-error: true
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           repository: ${{ github.repository_owner }}/SportsPress-Admin-Tools
           path: SportsPress-Admin-Tools
@@ -153,7 +153,7 @@ jobs:
 
       - name: Upload screenshots
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: screenshots
           path: /tmp/artifacts/screenshots/
@@ -162,7 +162,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: test-results
           path: /tmp/artifacts/test-results/
