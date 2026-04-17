@@ -51,6 +51,9 @@ RUN cd /tmp \
     && wget https://downloads.wordpress.org/plugin/debug-bar.1.1.8.zip -O debug-bar.zip \
     && unzip debug-bar.zip -d /var/www/html/wp-content/plugins/ \
     && rm debug-bar.zip \
+    && wget https://downloads.wordpress.org/plugin/woocommerce.10.7.0.zip -O woocommerce.zip \
+    && unzip woocommerce.zip -d /var/www/html/wp-content/plugins/ \
+    && rm woocommerce.zip \
     && wget https://github.com/Automattic/wordpress-mcp/archive/295b5cc.zip -O wordpress-mcp.zip \
     && unzip wordpress-mcp.zip -d /var/www/html/wp-content/plugins/ \
     && mv /var/www/html/wp-content/plugins/wordpress-mcp-* /var/www/html/wp-content/plugins/wordpress-mcp \

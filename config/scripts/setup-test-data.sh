@@ -145,6 +145,15 @@ wp transient delete _sp_activation_redirect --allow-root 2>/dev/null || echo "No
 echo "✅ SportsPress $SPORT demo data installed!"
 echo "Demo includes: Teams, Players, Events, Statistics, and proper configurations"
 
+# Complete WooCommerce setup to skip onboarding wizard
+if wp plugin is-installed woocommerce --allow-root 2>/dev/null; then
+    echo "Completing WooCommerce setup..."
+    wp option update woocommerce_onboarding_profile '{"skipped":true}' --format=json --allow-root
+    wp option update woocommerce_task_list_complete "yes" --allow-root 2>/dev/null || true
+    wp transient delete _wc_activation_redirect --allow-root 2>/dev/null || true
+    echo "✅ WooCommerce configured"
+fi
+
 # Export database baseline for test state reset
 # Agents can restore this snapshot between test suites to ensure clean state.
 echo "Exporting database baseline snapshot..."
