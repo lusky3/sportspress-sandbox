@@ -18,12 +18,12 @@ define('LOGGED_IN_SALT',   'test-salt');
 define('NONCE_SALT',       'test-salt');
 
 $table_prefix = 'wp_';
-define('WP_DEBUG', true);
+define('WP_DEBUG', filter_var(getenv('WP_DEBUG') ?: 'true', FILTER_VALIDATE_BOOLEAN));
 define('WP_DEBUG_DISPLAY', false);
 define('SCRIPT_DEBUG', true);
 define('DISABLE_WP_CRON', true);
 define('AUTOMATIC_UPDATER_DISABLED', true);
-define('WP_MEMORY_LIMIT', '128M');
+define('WP_MEMORY_LIMIT', getenv('WP_MEMORY_LIMIT') ?: '128M');
 ini_set('memory_limit', '256M');
 
 // Dynamic URL configuration — only trust expected hosts
