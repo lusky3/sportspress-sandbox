@@ -75,7 +75,7 @@ jobs:
         run: |
           echo "Waiting for Playwright MCP..."
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:3002/sse >/dev/null 2>&1; then
+            if curl -sf --max-time 2 http://localhost:3002/sse 2>/dev/null | grep -q sessionId; then
               echo "Playwright MCP ready on attempt $i"
               exit 0
             fi
