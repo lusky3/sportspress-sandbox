@@ -87,6 +87,14 @@ jobs:
 
       - name: Smoke test — SportsPress data exists
         run: |
+          echo "Waiting for setup to complete (baseline creation)..."
+          for i in $(seq 1 60); do
+            response=$(curl -sf http://localhost:8082/wp-json/test/v1/health)
+            baseline=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin)['baseline_exists'])")
+            [ "$baseline" = "True" ] && break
+            echo "  [$i] Setup still running..."
+            sleep 5
+          done
           response=$(curl -sf http://localhost:8082/wp-json/test/v1/health)
           sport=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin)['sport'])")
           theme=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin)['theme'])")
