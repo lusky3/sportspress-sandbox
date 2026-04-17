@@ -1,7 +1,7 @@
 FROM mcr.microsoft.com/playwright:v1.59.1-noble
 
-# Install curl (for healthcheck) and Google Chrome (required by @playwright/mcp)
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+# Install curl (for healthcheck) and Chrome dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends curl xdg-utils && rm -rf /var/lib/apt/lists/*
 RUN npx playwright install chrome
 
 # Install the MCP server package so startup is instant
