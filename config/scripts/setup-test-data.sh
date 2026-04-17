@@ -5,15 +5,17 @@ set -e
 
 echo "🏗️ Setting up WordPress and SportsPress test data..."
 
-# Skip setup if already completed (idempotency guard)
-if [ -f /var/lib/baseline/baseline.sql ]; then
-    echo "✅ Setup already completed (baseline exists). Skipping."
+# Skip setup if already completed (check DB state, not file — the baseline
+# volume persists across container recreations but MySQL data does not).
+if mysql --socket=/run/mysqld/mysqld.sock -e "SELECT 1 FROM wordpress.wp_options LIMIT 1" >/dev/null 2>&1; then
+    echo "✅ WordPress tables exist. Skipping setup."
+    # Re-export baseline in case DB was restored from a previous run
+    mkdir -p /var/lib/baseline
+    wp db export /var/lib/baseline/baseline.sql --allow-root 2>/dev/null || true
     exit 0
 fi
 
 DB_HOST=${WORDPRESS_DB_HOST:-localhost}
-DB_USER=${WORDPRESS_DB_USER:-wordpress}
-DB_PASSWORD=${WORDPRESS_DB_PASSWORD:-wordpress}
 
 # Wait for database — check that MariaDB accepts connections via the
 # same socket path WordPress uses, not just a TCP ping.
@@ -153,7 +155,7 @@ echo "Demo includes: Teams, Players, Events, Statistics, and proper configuratio
 # Complete WooCommerce setup to skip onboarding wizard
 if wp plugin is-installed woocommerce --allow-root 2>/dev/null; then
     echo "Completing WooCommerce setup..."
-    wp option update woocommerce_onboarding_profile '{"skipped":true}' --format=json --allow-root
+    wp option update woocommerce_onboarding_profile 'a:1:{s:9:"completed";b:1;}' --allow-root
     wp option update woocommerce_task_list_complete "yes" --allow-root 2>/dev/null || true
     wp transient delete _wc_activation_redirect --allow-root 2>/dev/null || true
     echo "✅ WooCommerce configured"
@@ -162,6 +164,7 @@ fi
 # Export database baseline for test state reset
 # Agents can restore this snapshot between test suites to ensure clean state.
 echo "Exporting database baseline snapshot..."
+mkdir -p /var/lib/baseline
 wp db export /var/lib/baseline/baseline.sql --allow-root
 echo "✅ Database baseline saved to /var/lib/baseline/baseline.sql"
 
