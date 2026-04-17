@@ -11,9 +11,12 @@ RUN npm install -g @playwright/mcp@0.0.70
 
 EXPOSE 3000
 
+# Run as non-root user (provided by the Playwright base image)
+USER pwuser
+
+# ⚠️  --allowed-hosts '*' is test-harness only. Do not reuse in production.
 CMD ["npx", "@playwright/mcp@0.0.70", \
      "--port", "3000", \
      "--host", "0.0.0.0", \
      "--allowed-hosts", "*", \
-     "--headless", \
-     "--no-sandbox"]
+     "--headless"]
