@@ -6,7 +6,7 @@
 - Events Manager tests (02-events-manager.md) have passed.
 - SportsPress Admin Tools and Schedule Generator child plugin are active.
 - SportsPress has leagues, seasons, and teams configured.
-- Database is at baseline state. Restore if needed: `docker exec sportspress-test wp db import /tmp/baseline.sql --allow-root`
+- Database is at baseline state. Restore if needed: `docker exec sportspress-test wp db import /var/lib/baseline/baseline.sql --allow-root`
 - Verify teams exist: `docker exec sportspress-test wp post list --post_type=sp_team --format=table --allow-root`
 - Verify leagues exist: `docker exec sportspress-test wp post list --post_type=sp_league --format=table --allow-root`
 - Verify venues exist: `docker exec sportspress-test wp post list --post_type=sp_venue --format=table --allow-root`

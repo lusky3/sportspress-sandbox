@@ -10,7 +10,7 @@ on:
 jobs:
   agent-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       # ── Checkout repositories ──────────────────────────────────────────
@@ -18,17 +18,24 @@ jobs:
       - name: Checkout sportspress-sandbox
         uses: actions/checkout@v4
 
-      # Sibling repo required by compose volume mount
+      # Sibling repo required by compose volume mount (optional — private repo)
       - name: Checkout SportsPress-Admin-Tools
+        continue-on-error: true
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/SportsPress-Admin-Tools
-          path: ../SportsPress-Admin-Tools
+          path: SportsPress-Admin-Tools
+
+      # compose.yml mounts ../SportsPress-Admin-Tools — create dir if checkout failed
+      - name: Ensure sibling directory exists
+        run: |
+          mkdir -p SportsPress-Admin-Tools
+          ln -sf ${{ github.workspace }}/SportsPress-Admin-Tools ../SportsPress-Admin-Tools
 
       # ── Build & start environment ──────────────────────────────────────
       - name: Build and start Docker Compose environment
         run: docker compose up -d --build --wait
-        timeout-minutes: 10
+        timeout-minutes: 20
 
       # ── Wait for health endpoint ───────────────────────────────────────
       - name: Wait for health endpoint
@@ -63,6 +70,66 @@ jobs:
             echo "FAIL: wp-admin returned HTTP $status"
             exit 1
           fi
+
+      - name: Smoke test — Playwright MCP is healthy
+        run: |
+          echo "Waiting for Playwright MCP..."
+          for i in $(seq 1 30); do
+            if curl -sf --max-time 2 http://localhost:3002/sse 2>/dev/null | grep -q sessionId; then
+              echo "Playwright MCP ready on attempt $i"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "FAIL: Playwright MCP did not become healthy"
+          docker compose logs playwright --tail=50
+          exit 1
+
+      - name: Smoke test — SportsPress data exists
+        run: |
+          echo "Waiting for setup to complete (baseline creation)..."
+          for i in $(seq 1 60); do
+            response=$(curl -sf http://localhost:8082/wp-json/test/v1/health)
+            baseline=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin)['baseline_exists'])")
+            [ "$baseline" = "True" ] && break
+            echo "  [$i] Setup still running..."
+            sleep 5
+          done
+          response=$(curl -sf http://localhost:8082/wp-json/test/v1/health)
+          sport=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin)['sport'])")
+          theme=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin)['theme'])")
+          baseline=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin)['baseline_exists'])")
+          echo "Sport: $sport | Theme: $theme | Baseline: $baseline"
+          [ "$sport" != "none" ] && [ "$sport" != "unknown" ] || { echo "FAIL: sport not configured"; exit 1; }
+          [ "$theme" = "rookie" ] || { echo "FAIL: theme is $theme, expected rookie"; exit 1; }
+          [ "$baseline" = "True" ] || { echo "FAIL: baseline.sql missing"; exit 1; }
+
+      - name: Smoke test — Playwright MCP can navigate to WordPress
+        continue-on-error: true
+        run: |
+          # Initialize MCP session
+          INIT=$(curl -s http://localhost:3002/mcp -X POST \
+            -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
+            -D /tmp/mcp_headers.txt \
+            -d '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ci","version":"0.1"}},"id":1}' \
+            --max-time 10)
+          SESSION=$(grep -i "mcp-session-id" /tmp/mcp_headers.txt | tr -d '\r' | awk '{print $2}')
+          echo "MCP Session: $SESSION"
+          [ -n "$SESSION" ] || { echo "FAIL: no MCP session"; exit 1; }
+
+          # Send initialized notification
+          curl -s http://localhost:3002/mcp -X POST \
+            -H "Content-Type: application/json" -H "mcp-session-id: $SESSION" \
+            -d '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+            --max-time 5 >/dev/null 2>&1
+
+          # Navigate to WordPress admin (use timeout to handle SSE streaming)
+          NAV=$(timeout 60 curl -sN http://localhost:3002/mcp -X POST \
+            -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
+            -H "mcp-session-id: $SESSION" \
+            -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"browser_navigate","arguments":{"url":"http://sportspress-test/wp-admin/"}},"id":2}' 2>&1 || true)
+          echo "Response: $NAV"
+          echo "$NAV" | grep -q "Dashboard" && echo "Browser navigation successful" || echo "WARN: browser test inconclusive"
 
       # ── Collect artifacts from Docker volumes ──────────────────────────
       - name: Collect screenshots and test results

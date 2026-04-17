@@ -7,7 +7,7 @@
 #   docker compose down             # Stop all services
 #
 # LLM Agent Connection:
-#   MCP Server:  http://localhost:3000/sse
+#   MCP Server:  http://localhost:3002/sse
 #   WordPress:   http://localhost:8082 (auto-login enabled)
 #   REST API:    http://localhost:8082/wp-json/test/v1/health
 #
@@ -20,19 +20,19 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: sportspress-test
     ports:
       - "8082:80"
-      - "3306:3306"
     volumes:
       # Mount the SportsPress Admin Tools plugin from sibling directory
       - ../SportsPress-Admin-Tools:/var/www/html/wp-content/plugins/sportspress-admin-tools
-      # Persist screenshots and test results for review
+      - baseline:/var/lib/baseline
       - screenshots:/screenshots
       - test-results:/test-results
     tmpfs:
       - /dev/shm:size=256m
     environment:
-      - WORDPRESS_DB_HOST=localhost
+      - WORDPRESS_DB_HOST=localhost:/run/mysqld/mysqld.sock
       - WORDPRESS_DB_USER=wordpress
       - WORDPRESS_DB_PASSWORD=wordpress
       - WORDPRESS_DB_NAME=wordpress
@@ -51,27 +51,30 @@ services:
   # Chromium runs inside this container and navigates to WordPress
   # over the shared Docker network.
   playwright:
-    image: mcr.microsoft.com/playwright:v1.52.0-noble
+    build:
+      context: .
+      dockerfile: Dockerfile.playwright
     depends_on:
       sportspress-test:
         condition: service_healthy
     ports:
-      - "3000:3000"
+      - "3002:3000"
+    shm_size: 1gb
     volumes:
       - screenshots:/screenshots
       - test-results:/test-results
-    environment:
-      - DISPLAY=:99
-    command: >
-      npx @playwright/mcp@0.0.70
-      --port 3000
-      --host 0.0.0.0
     networks:
       - sp-test-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf --max-time 2 http://localhost:3000/sse | grep -q sessionId"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
 
-  # Mailhog — captures outgoing emails for verification
-  mailhog:
-    image: mailhog/mailhog
+  # Mailpit — captures outgoing emails for verification
+  mailpit:
+    image: axllent/mailpit:v1.29.7
     ports:
       - "8025:8025"
     networks:
@@ -79,9 +82,9 @@ services:
 
   # Adminer — lightweight database management UI
   adminer:
-    image: adminer
+    image: adminer:5.4.2
     ports:
-      - "8080:8080"
+      - "8088:8080"
     networks:
       - sp-test-net
 
@@ -90,5 +93,6 @@ networks:
     driver: bridge
 
 volumes:
+  baseline:
   screenshots:
   test-results:

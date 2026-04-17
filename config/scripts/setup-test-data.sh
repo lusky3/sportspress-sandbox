@@ -5,25 +5,29 @@ set -e
 
 echo "🏗️ Setting up WordPress and SportsPress test data..."
 
+# Skip setup if already completed (idempotency guard)
+if [ -f /var/lib/baseline/baseline.sql ]; then
+    echo "✅ Setup already completed (baseline exists). Skipping."
+    exit 0
+fi
+
 DB_HOST=${WORDPRESS_DB_HOST:-localhost}
 DB_USER=${WORDPRESS_DB_USER:-wordpress}
 DB_PASSWORD=${WORDPRESS_DB_PASSWORD:-wordpress}
 
-# Wait for database
-echo "Waiting for database at $DB_HOST..."
+# Wait for database — check that MariaDB accepts connections via the
+# same socket path WordPress uses, not just a TCP ping.
+echo "Waiting for database..."
 for i in {1..30}; do
-    if [[ "$DB_HOST" == "localhost"* ]] || [[ "$DB_HOST" == "127.0.0.1"* ]]; then
-        if mysqladmin ping -h"localhost" --silent 2>/dev/null; then
-            echo "Database is ready"
-            break
-        fi
-    else
-        if mysqladmin ping -h"$DB_HOST" -u"$DB_USER" -p"$DB_PASSWORD" --silent 2>/dev/null; then
-            echo "Database is ready"
-            break
-        fi
+    if mysql --socket=/run/mysqld/mysqld.sock -e "SELECT 1" >/dev/null 2>&1; then
+        echo "Database is ready"
+        break
     fi
     echo "Attempt $i/30: Database not ready yet..."
+    if [ "$i" -eq 30 ]; then
+        echo "❌ Database connection timed out after 60 seconds"
+        exit 1
+    fi
     sleep 2
 done
 
@@ -48,17 +52,23 @@ wp option update default_comment_status closed --allow-root
 wp option update default_ping_status closed --allow-root
 wp option update uploads_use_yearmonth_folders 0 --allow-root
 
-# Clear any hardcoded URLs to prevent redirects
-wp option update home "" --allow-root
-wp option update siteurl "" --allow-root
+# Set URLs to localhost — wp-config.php dynamically overrides with
+# $_SERVER['HTTP_HOST'] for browser requests, but this keeps WP-CLI
+# and cron URLs valid.
+wp option update home "http://localhost" --allow-root
+wp option update siteurl "http://localhost" --allow-root
 
 # Remove default WordPress plugins
 echo "Removing default plugins..."
 wp plugin delete akismet hello --allow-root 2>/dev/null || echo "Default plugins already removed"
 
-# Install and activate plugins
-echo "Installing SportsPress..."
-wp plugin install sportspress --activate --allow-root
+# Activate SportsPress (already installed in Dockerfile; install as fallback)
+echo "Activating SportsPress..."
+if wp plugin is-installed sportspress --allow-root 2>/dev/null; then
+    wp plugin activate sportspress --allow-root
+else
+    wp plugin install sportspress --activate --allow-root
+fi
 
 # Activate any available plugins in wp-content/plugins
 echo "Checking for additional plugins to activate..."
@@ -74,7 +84,7 @@ done
 
 # Install and activate Rookie theme
 echo "Installing Rookie theme..."
-if wp theme install https://downloads.wordpress.org/theme/rookie.zip --activate --allow-root; then
+if wp theme install https://downloads.wordpress.org/theme/rookie.1.5.4.zip --activate --allow-root; then
     echo "✅ Rookie theme activated successfully"
     echo "Removing all default themes..."
     wp theme delete twentytwentyfive twentytwentyfour twentytwentythree --allow-root 2>/dev/null || echo "Some default themes already removed"
@@ -117,6 +127,7 @@ if (class_exists('SP_Admin_Sample_Data')) {
     echo 'SP_Admin_Sample_Data class not found';
 }
 " --allow-root
+wp option update sportspress_sport "$SPORT" --allow-root
 echo "✅ SportsPress sample data installation completed for $SPORT"
 
 # Generate extra SportsPress data (Teams, Players, Leagues, Seasons, etc.)
@@ -134,12 +145,20 @@ wp transient delete _sp_activation_redirect --allow-root 2>/dev/null || echo "No
 echo "✅ SportsPress $SPORT demo data installed!"
 echo "Demo includes: Teams, Players, Events, Statistics, and proper configurations"
 
+# Complete WooCommerce setup to skip onboarding wizard
+if wp plugin is-installed woocommerce --allow-root 2>/dev/null; then
+    echo "Completing WooCommerce setup..."
+    wp option update woocommerce_onboarding_profile '{"skipped":true}' --format=json --allow-root
+    wp option update woocommerce_task_list_complete "yes" --allow-root 2>/dev/null || true
+    wp transient delete _wc_activation_redirect --allow-root 2>/dev/null || true
+    echo "✅ WooCommerce configured"
+fi
+
 # Export database baseline for test state reset
 # Agents can restore this snapshot between test suites to ensure clean state.
 echo "Exporting database baseline snapshot..."
-wp db export /tmp/baseline.sql --allow-root
-echo "✅ Database baseline saved to /tmp/baseline.sql"
+wp db export /var/lib/baseline/baseline.sql --allow-root
+echo "✅ Database baseline saved to /var/lib/baseline/baseline.sql"
 
-# Keep the setup process running to prevent container exit
-echo "Setup completed, keeping process alive..."
-tail -f /dev/null
+# Setup complete — exit cleanly so supervisord marks this as EXITED
+echo "Setup completed successfully."

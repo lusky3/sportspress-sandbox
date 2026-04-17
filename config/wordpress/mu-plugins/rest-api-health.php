@@ -31,12 +31,14 @@ function sp_test_health_callback() {
     }, $active_plugins);
 
     return new WP_REST_Response([
-        'status'       => 'ready',
-        'wordpress'    => get_bloginfo('version'),
-        'sportspress'  => defined('SP_VERSION') ? SP_VERSION : 'not-active',
-        'sport'        => get_option('sportspress_sport', 'unknown'),
-        'plugins'      => array_values($plugin_slugs),
-        'theme'        => get_stylesheet(),
-        'timestamp'    => gmdate('c'),
+        'status'          => 'ready',
+        'wordpress'       => get_bloginfo('version'),
+        'sportspress'     => defined('SP_VERSION') ? SP_VERSION : 'not-active',
+        'sport'           => get_option('sportspress_sport', 'unknown'),
+        'plugins'         => array_values($plugin_slugs),
+        'theme'           => get_stylesheet(),
+        'auto_login'      => file_exists(WPMU_PLUGIN_DIR . '/auto-login.php'),
+        'baseline_exists' => file_exists('/var/lib/baseline/baseline.sql'),
+        'timestamp'       => gmdate('c'),
     ], 200);
 }

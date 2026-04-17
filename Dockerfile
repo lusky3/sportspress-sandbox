@@ -42,22 +42,25 @@ RUN cd /tmp \
     && wget https://downloads.wordpress.org/plugin/sportspress.2.7.29.zip -O sportspress.zip \
     && unzip sportspress.zip -d /var/www/html/wp-content/plugins/ \
     && rm sportspress.zip \
-    && wget https://downloads.wordpress.org/plugin/user-switching.zip \
+    && wget https://downloads.wordpress.org/plugin/user-switching.1.11.2.zip -O user-switching.zip \
     && unzip user-switching.zip -d /var/www/html/wp-content/plugins/ \
     && rm user-switching.zip \
-    && wget https://downloads.wordpress.org/plugin/query-monitor.zip \
+    && wget https://downloads.wordpress.org/plugin/query-monitor.4.0.6.zip -O query-monitor.zip \
     && unzip query-monitor.zip -d /var/www/html/wp-content/plugins/ \
     && rm query-monitor.zip \
-    && wget https://downloads.wordpress.org/plugin/debug-bar.zip \
+    && wget https://downloads.wordpress.org/plugin/debug-bar.1.1.8.zip -O debug-bar.zip \
     && unzip debug-bar.zip -d /var/www/html/wp-content/plugins/ \
     && rm debug-bar.zip \
-    && wget https://github.com/Automattic/wordpress-mcp/archive/refs/heads/trunk.zip -O wordpress-mcp.zip \
+    && wget https://downloads.wordpress.org/plugin/woocommerce.10.7.0.zip -O woocommerce.zip \
+    && unzip woocommerce.zip -d /var/www/html/wp-content/plugins/ \
+    && rm woocommerce.zip \
+    && wget https://github.com/Automattic/wordpress-mcp/archive/295b5cc.zip -O wordpress-mcp.zip \
     && unzip wordpress-mcp.zip -d /var/www/html/wp-content/plugins/ \
-    && mv /var/www/html/wp-content/plugins/wordpress-mcp-trunk /var/www/html/wp-content/plugins/wordpress-mcp \
+    && mv /var/www/html/wp-content/plugins/wordpress-mcp-* /var/www/html/wp-content/plugins/wordpress-mcp \
     && rm wordpress-mcp.zip \
-    && wget https://github.com/WordPress/abilities-api/archive/refs/heads/trunk.zip -O abilities-api.zip \
+    && wget https://github.com/WordPress/abilities-api/archive/5f64910.zip -O abilities-api.zip \
     && unzip abilities-api.zip -d /var/www/html/wp-content/plugins/ \
-    && mv /var/www/html/wp-content/plugins/abilities-api-trunk /var/www/html/wp-content/plugins/abilities-api \
+    && mv /var/www/html/wp-content/plugins/abilities-api-* /var/www/html/wp-content/plugins/abilities-api \
     && rm abilities-api.zip
 
 # Copy configuration files from organized directories
@@ -70,7 +73,7 @@ COPY config/mariadb/my.cnf /etc/my.cnf.d/99-test-optimizations.cnf
 COPY config/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY config/php/php-fpm.conf /usr/local/etc/php-fpm.d/www.conf
 COPY config/php/xdebug.ini /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
-COPY config/php/mailhog.ini /usr/local/etc/php/conf.d/mailhog.ini
+COPY config/php/mailpit.ini /usr/local/etc/php/conf.d/mailpit.ini
 
 # Create tmpfs mount point for temporary files
 RUN mkdir -p /dev/shm && chmod 1777 /dev/shm
@@ -93,7 +96,7 @@ RUN mkdir -p /var/log/nginx /var/lib/nginx/tmp \
 # Set default sport for SportsPress demo data
 ENV SPORTSPRESS_SPORT=ice-hockey
 
-EXPOSE 80 3306
+EXPOSE 80
 
 # Use supervisord to manage nginx, php-fpm, and MariaDB
 CMD ["/usr/local/bin/start.sh"]

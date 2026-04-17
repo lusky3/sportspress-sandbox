@@ -54,11 +54,12 @@ for suite in "${SUITES[@]}"; do
 
   start=$(date +%s)
 
-  # Placeholder: the LLM agent runs the suite externally.
-  # Copy the suite file into results for reference.
+  # The LLM agent runs the suite externally via Playwright MCP.
+  # To run manually: pipe the suite to your agent with MCP configured at localhost:3002/sse
+  # The agent should produce a JSON results file at $RESULTS_DIR/${name}.json
   cp "$suite" "$RESULTS_DIR/${name}.md"
-  echo "Suite file copied to $RESULTS_DIR/${name}.md"
-  echo "Awaiting test results in $RESULTS_DIR/${name}.json"
+  echo "Suite ready at: $RESULTS_DIR/${name}.md"
+  echo "Agent should write results to: $RESULTS_DIR/${name}.json"
 
   end=$(date +%s)
   elapsed=$((end - start))
