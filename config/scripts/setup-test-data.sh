@@ -38,12 +38,17 @@ if [[ "$DB_HOST" == "localhost"* ]] || [[ "$DB_HOST" == "127.0.0.1"* ]]; then
 fi
 
 # Install WordPress
+WP_TITLE=${WORDPRESS_TITLE:-SportsPress Test Site}
+WP_ADMIN_USER=${WORDPRESS_ADMIN_USER:-admin}
+WP_ADMIN_PASSWORD=${WORDPRESS_ADMIN_PASSWORD:-admin}
+WP_ADMIN_EMAIL=${WORDPRESS_ADMIN_EMAIL:-admin@test.com}
+
 wp core install \
     --url="http://localhost" \
-    --title="SportsPress Test Site" \
-    --admin_user="admin" \
-    --admin_password="admin" \
-    --admin_email="admin@test.com" \
+    --title="$WP_TITLE" \
+    --admin_user="$WP_ADMIN_USER" \
+    --admin_password="$WP_ADMIN_PASSWORD" \
+    --admin_email="$WP_ADMIN_EMAIL" \
     --allow-root
 
 # Configure WordPress options

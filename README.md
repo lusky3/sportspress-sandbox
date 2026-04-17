@@ -100,8 +100,10 @@ Returns:
   "wordpress": "6.9.4",
   "sportspress": "2.7.29",
   "sport": "ice-hockey",
-  "plugins": ["sportspress", "sportspress-admin-tools", ...],
+  "plugins": ["sportspress", "woocommerce", "sportspress-admin-tools", ...],
   "theme": "rookie",
+  "auto_login": true,
+  "baseline_exists": true,
   "timestamp": "2026-04-16T18:30:00+00:00"
 }
 ```
@@ -172,6 +174,7 @@ Set `SPORTSPRESS_SPORT` environment variable:
 ## Features
 
 - **Auto-Login** — Automatically logged in as admin (no credentials needed)
+- **WooCommerce** — WooCommerce pre-installed and activated (onboarding skipped)
 - **Debug Tools** — Query Monitor, Debug Bar, and User Switching pre-installed
 - **Email Capture** — All outgoing email routed via SMTP to Mailpit for inspection
 - **MCP Server** — WordPress MCP Server plugin installed (inactive by default)
@@ -228,6 +231,24 @@ The `agent-tests.yml` workflow runs on push to main and pull requests:
     ├── build-image.yml                 # Docker image build
     └── check-updates.yml               # Dependency update checks
 ```
+
+## Environment Variables
+
+All configuration can be set via environment variables in `compose.yml` or a `.env` file. See `.env.example` for a template.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SPORTSPRESS_SPORT` | `ice-hockey` | Sport preset for demo data (see Sports Available) |
+| `WORDPRESS_TITLE` | `SportsPress Test Site` | Site title |
+| `WORDPRESS_ADMIN_USER` | `admin` | Admin username |
+| `WORDPRESS_ADMIN_PASSWORD` | `admin` | Admin password |
+| `WORDPRESS_ADMIN_EMAIL` | `admin@test.com` | Admin email |
+| `WP_DEBUG` | `true` | Enable WordPress debug mode |
+| `WP_MEMORY_LIMIT` | `128M` | WordPress memory limit |
+| `WORDPRESS_DB_HOST` | `localhost:/run/mysqld/mysqld.sock` | Database host (or external host) |
+| `WORDPRESS_DB_USER` | `wordpress` | Database username |
+| `WORDPRESS_DB_PASSWORD` | `wordpress` | Database password |
+| `WORDPRESS_DB_NAME` | `wordpress` | Database name |
 
 ## External Database
 
