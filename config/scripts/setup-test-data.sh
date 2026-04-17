@@ -159,6 +159,86 @@ if wp plugin is-installed woocommerce --allow-root 2>/dev/null; then
     wp option update woocommerce_task_list_complete "yes" --allow-root 2>/dev/null || true
     wp transient delete _wc_activation_redirect --allow-root 2>/dev/null || true
     echo "✅ WooCommerce configured"
+
+    # Create sample WooCommerce products matching production registration structure
+    echo "Creating WooCommerce registration products..."
+    wp eval '
+        // Create product categories: Registration > Summer 2026
+        $reg_cat = term_exists("Registration", "product_cat");
+        if (!$reg_cat) {
+            $reg_cat = wp_insert_term("Registration", "product_cat", ["slug" => "registration"]);
+        }
+        $reg_id = is_array($reg_cat) ? $reg_cat["term_id"] : $reg_cat;
+
+        $season_cat = term_exists("Summer 2026", "product_cat");
+        if (!$season_cat) {
+            $season_cat = wp_insert_term("Summer 2026", "product_cat", ["slug" => "summer-2026", "parent" => $reg_id]);
+        }
+        $season_id = is_array($season_cat) ? $season_cat["term_id"] : $season_cat;
+
+        $products = [
+            [
+                "title"    => "Player Registration (S2026)",
+                "slug"     => "player-registration-s2026",
+                "sku"      => "S2026-P",
+                "price"    => "440",
+                "sale"     => "415",
+                "stock"    => 20,
+                "manage"   => true,
+            ],
+            [
+                "title"    => "Goalie Registration (S2026)",
+                "slug"     => "goalie-registration-s2026",
+                "sku"      => "S2026-G",
+                "price"    => "125",
+                "sale"     => "",
+                "stock"    => 4,
+                "manage"   => true,
+            ],
+            [
+                "title"    => "Player Waitlist (S2026)",
+                "slug"     => "player-waitlist-s2026",
+                "sku"      => "S2026-WL",
+                "price"    => "0",
+                "sale"     => "",
+                "stock"    => 0,
+                "manage"   => false,
+            ],
+        ];
+
+        foreach ($products as $p) {
+            if (get_page_by_path($p["slug"], OBJECT, "product")) {
+                echo "Skipped (exists): " . $p["title"] . "\n";
+                continue;
+            }
+            $id = wp_insert_post([
+                "post_title"   => $p["title"],
+                "post_name"    => $p["slug"],
+                "post_status"  => "publish",
+                "post_type"    => "product",
+            ]);
+            if (is_wp_error($id)) { echo "Error: " . $id->get_error_message() . "\n"; continue; }
+
+            wp_set_object_terms($id, "simple", "product_type");
+            wp_set_object_terms($id, [$reg_id, $season_id], "product_cat");
+
+            update_post_meta($id, "_regular_price", $p["price"]);
+            update_post_meta($id, "_price", $p["sale"] ?: $p["price"]);
+            if ($p["sale"]) update_post_meta($id, "_sale_price", $p["sale"]);
+            update_post_meta($id, "_sku", $p["sku"]);
+            update_post_meta($id, "_virtual", "yes");
+            update_post_meta($id, "_sold_individually", "yes");
+            update_post_meta($id, "_tax_status", "none");
+            update_post_meta($id, "_manage_stock", $p["manage"] ? "yes" : "no");
+            update_post_meta($id, "_stock", $p["stock"]);
+            update_post_meta($id, "_stock_status", ($p["manage"] && $p["stock"] > 0) ? "instock" : ($p["manage"] ? "outofstock" : "instock"));
+            update_post_meta($id, "_downloadable", "no");
+            update_post_meta($id, "_visibility", "visible");
+
+            echo "Created: " . $p["title"] . " (#$id) - \$" . $p["price"] . "\n";
+        }
+    ' --allow-root
+    echo "✅ WooCommerce products created"
 fi
 
 # Export database baseline for test state reset
