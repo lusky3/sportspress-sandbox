@@ -91,6 +91,7 @@ RUN mkdir -p /var/log/nginx /var/lib/nginx/tmp \
     && chmod -R 755 /var/www/html \
     && chown -R mysql:mysql /var/lib/mysql \
     && chown -R www-data:www-data /var/log/nginx \
+    && chown -R www-data:www-data /var/lib/nginx \
     && chown www-data:www-data /var/log/php_errors.log
 
 # Set default sport for SportsPress demo data
