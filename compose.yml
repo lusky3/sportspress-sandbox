@@ -74,7 +74,7 @@ services:
 
   # Mailpit — captures outgoing emails for verification
   mailpit:
-    image: axllent/mailpit:v1.29.7
+    image: axllent/mailpit:v1.30.7
     ports:
       - "8025:8025"
     networks:
@@ -82,7 +82,7 @@ services:
 
   # Adminer — lightweight database management UI
   adminer:
-    image: adminer:5.4.2
+    image: adminer:6.0.1
     ports:
       - "8088:8080"
     networks:

@@ -1,4 +1,4 @@
-FROM wordpress:6.9.4-php8.5-fpm-alpine
+FROM wordpress:7.1.0-php8.5-fpm-alpine
 
 # Install MariaDB, wp-cli, nginx, and supervisord for process management
 RUN apk add --no-cache \
@@ -39,19 +39,19 @@ RUN cp -r /usr/src/wordpress/* /var/www/html/ \
 
 # Download and install SportsPress plugin and dev tools
 RUN cd /tmp \
-    && wget https://downloads.wordpress.org/plugin/sportspress.2.7.29.zip -O sportspress.zip \
+    && wget https://downloads.wordpress.org/plugin/sportspress.2.7.31.zip -O sportspress.zip \
     && unzip sportspress.zip -d /var/www/html/wp-content/plugins/ \
     && rm sportspress.zip \
-    && wget https://downloads.wordpress.org/plugin/user-switching.1.11.2.zip -O user-switching.zip \
+    && wget https://downloads.wordpress.org/plugin/user-switching.1.12.1.zip -O user-switching.zip \
     && unzip user-switching.zip -d /var/www/html/wp-content/plugins/ \
     && rm user-switching.zip \
-    && wget https://downloads.wordpress.org/plugin/query-monitor.4.0.6.zip -O query-monitor.zip \
+    && wget https://downloads.wordpress.org/plugin/query-monitor.4.0.7.zip -O query-monitor.zip \
     && unzip query-monitor.zip -d /var/www/html/wp-content/plugins/ \
     && rm query-monitor.zip \
     && wget https://downloads.wordpress.org/plugin/debug-bar.1.1.8.zip -O debug-bar.zip \
     && unzip debug-bar.zip -d /var/www/html/wp-content/plugins/ \
     && rm debug-bar.zip \
-    && wget https://downloads.wordpress.org/plugin/woocommerce.10.7.0.zip -O woocommerce.zip \
+    && wget https://downloads.wordpress.org/plugin/woocommerce.11.0.1.zip -O woocommerce.zip \
     && unzip woocommerce.zip -d /var/www/html/wp-content/plugins/ \
     && rm woocommerce.zip \
     && wget https://github.com/Automattic/wordpress-mcp/archive/295b5cc.zip -O wordpress-mcp.zip \
