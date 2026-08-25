@@ -7,6 +7,7 @@
  *              makes it unconditional so no plugin or timing issue can suppress it.
  */
 
-// Force the filter true early — before SportsPress's init hook (priority 10)
-// registers taxonomies so it's resolved correctly on every WP-CLI invocation.
-add_filter('sportspress_has_seasons', '__return_true', 1);
+// Force the filter true at maximum priority so it overrides any callback that
+// returns false, regardless of when it was registered. SP_Post_Types::register_taxonomies()
+// runs on init at priority 10; this runs last when apply_filters() evaluates.
+add_filter( 'sportspress_has_seasons', '__return_true', PHP_INT_MAX );

@@ -80,7 +80,9 @@ foreach ( $teams as $team_name ) {
 		$team_ids[] = $team_id;
 		// Assign to all leagues and seasons for simplicity
 		wp_set_object_terms( $team_id, array_values( $league_ids ), 'sp_league' );
-		wp_set_object_terms( $team_id, array_values( $season_ids ), 'sp_season' );
+		if ( ! empty( $season_ids ) ) {
+			wp_set_object_terms( $team_id, array_values( $season_ids ), 'sp_season' );
+		}
 	}
 }
 
@@ -113,7 +115,9 @@ foreach ( $player_names as $index => $player_name ) {
 		
 		// Assign to leagues and seasons
 		wp_set_object_terms( $player_id, array_values( $league_ids ), 'sp_league' );
-		wp_set_object_terms( $player_id, array_values( $season_ids ), 'sp_season' );
+		if ( ! empty( $season_ids ) ) {
+			wp_set_object_terms( $player_id, array_values( $season_ids ), 'sp_season' );
+		}
 		
 		// Set current team meta
 		update_post_meta( $player_id, 'sp_current_team', $team_id );
@@ -139,7 +143,9 @@ foreach ( $staff_names as $staff_name ) {
 	if ( $staff_id ) {
 		$team_id = $team_ids[ array_rand( $team_ids ) ];
 		wp_set_object_terms( $staff_id, [ $team_id ], 'sp_team' );
-		wp_set_object_terms( $staff_id, array_values( $season_ids ), 'sp_season' );
+		if ( ! empty( $season_ids ) ) {
+			wp_set_object_terms( $staff_id, array_values( $season_ids ), 'sp_season' );
+		}
 		wp_set_object_terms( $staff_id, array_values( $league_ids ), 'sp_league' );
 	}
 }
@@ -215,8 +221,12 @@ if ( ! $table_id ) {
 	echo "✅ Created Table: $table_title ($table_id)\n";
 }
 if ( $table_id ) {
-	if ( $league_id ) wp_set_object_terms( $table_id, [ $league_id ], 'sp_league' );
-	if ( $season_id ) wp_set_object_terms( $table_id, [ $season_id ], 'sp_season' );
+	if ( $league_id ) {
+		wp_set_object_terms( $table_id, [ $league_id ], 'sp_league' );
+	}
+	if ( $season_id ) {
+		wp_set_object_terms( $table_id, [ $season_id ], 'sp_season' );
+	}
 }
 
 // 9. Create Player List
@@ -231,8 +241,12 @@ if ( ! $list_id ) {
 	echo "✅ Created Player List: $list_title ($list_id)\n";
 }
 if ( $list_id ) {
-	if ( $league_id ) wp_set_object_terms( $list_id, [ $league_id ], 'sp_league' );
-	if ( $season_id ) wp_set_object_terms( $list_id, [ $season_id ], 'sp_season' );
+	if ( $league_id ) {
+		wp_set_object_terms( $list_id, [ $league_id ], 'sp_league' );
+	}
+	if ( $season_id ) {
+		wp_set_object_terms( $list_id, [ $season_id ], 'sp_season' );
+	}
 }
 
 // 10. Create Calendar
@@ -247,8 +261,12 @@ if ( ! $calendar_id ) {
 	echo "✅ Created Calendar: $calendar_title ($calendar_id)\n";
 }
 if ( $calendar_id ) {
-	if ( $league_id ) wp_set_object_terms( $calendar_id, [ $league_id ], 'sp_league' );
-	if ( $season_id ) wp_set_object_terms( $calendar_id, [ $season_id ], 'sp_season' );
+	if ( $league_id ) {
+		wp_set_object_terms( $calendar_id, [ $league_id ], 'sp_league' );
+	}
+	if ( $season_id ) {
+		wp_set_object_terms( $calendar_id, [ $season_id ], 'sp_season' );
+	}
 }
 
 // 11. Create Metrics
