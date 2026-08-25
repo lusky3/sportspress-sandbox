@@ -5,10 +5,19 @@
 - SportsPress core plugin activated
 - SPAT League Manager child plugin activated
 - WP-CLI available via `docker exec` or direct shell
-- At least one league, season, and team exist (create via WP-CLI if needed):
-  - `wp term create sp_league "Test League"`
-  - `wp term create sp_season "$(date +%Y)"` (or verify an existing current-year season exists)
-  - `wp post create --post_type=sp_team --post_title="Test Team LM" --post_status=publish`
+- At least one league, season, and team exist, with the team assigned to both (create via WP-CLI if needed):
+  - `wp term create sp_league "Test League" --allow-root`
+  - `wp term create sp_season "$(date +%Y)" --allow-root`
+  - `TEAM_ID=$(docker exec sportspress-test wp post create --post_type=sp_team --post_title="Test Team LM" --post_status=publish --porcelain --allow-root)` then assign terms:
+    - `wp post term set $TEAM_ID sp_league "Test League" --allow-root`
+    - `wp post term set $TEAM_ID sp_season "$(date +%Y)" --allow-root`
+
+  Or in a single shell block inside the container:
+  ```bash
+  TEAM_ID=$(wp post create --post_type=sp_team --post_title="Test Team LM" --post_status=publish --porcelain --allow-root)
+  wp post term set $TEAM_ID sp_league "Test League" --allow-root
+  wp post term set $TEAM_ID sp_season "$(date +%Y)" --allow-root
+  ```
 
 ## Test Cases
 
