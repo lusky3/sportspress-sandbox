@@ -40,7 +40,7 @@ services:
     networks:
       - sp-test-net
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost/wp-json/test/v1/health"]
+      test: ["CMD-SHELL", "curl -sf http://localhost/wp-json/test/v1/health | grep -q '\"status\":\"ready\"'"]
       interval: 10s
       timeout: 5s
       retries: 30

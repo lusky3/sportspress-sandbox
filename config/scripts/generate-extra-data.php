@@ -35,11 +35,20 @@ foreach ( $leagues as $league ) {
 }
 
 // 2. Create Seasons
-$seasons = [ '2024', '2025' ];
-$season_ids = [];
-foreach ( $seasons as $season ) {
-	$id = create_sp_term( $season, 'sp_season' );
-	if ( $id ) $season_ids[$season] = $id;
+// Guard: if sp_season isn't registered (e.g. filter race), bail early with a clear message.
+if ( ! taxonomy_exists( 'sp_season' ) ) {
+	echo "❌ sp_season taxonomy is not registered. Ensure sportspress_has_seasons filter returns true.\n";
+	echo "   Skipping all season-related data creation.\n";
+	// Use current year as a no-op fallback so downstream $season_id checks don't fatal.
+	$season_ids = [];
+} else {
+	$current_year = (int) date( 'Y' );
+	$seasons = [ (string)($current_year - 1), (string)$current_year ];
+	$season_ids = [];
+	foreach ( $seasons as $season ) {
+		$id = create_sp_term( $season, 'sp_season' );
+		if ( $id ) $season_ids[$season] = $id;
+	}
 }
 
 // 3. Create Positions
@@ -71,7 +80,9 @@ foreach ( $teams as $team_name ) {
 		$team_ids[] = $team_id;
 		// Assign to all leagues and seasons for simplicity
 		wp_set_object_terms( $team_id, array_values( $league_ids ), 'sp_league' );
-		wp_set_object_terms( $team_id, array_values( $season_ids ), 'sp_season' );
+		if ( ! empty( $season_ids ) ) {
+			wp_set_object_terms( $team_id, array_values( $season_ids ), 'sp_season' );
+		}
 	}
 }
 
@@ -104,7 +115,9 @@ foreach ( $player_names as $index => $player_name ) {
 		
 		// Assign to leagues and seasons
 		wp_set_object_terms( $player_id, array_values( $league_ids ), 'sp_league' );
-		wp_set_object_terms( $player_id, array_values( $season_ids ), 'sp_season' );
+		if ( ! empty( $season_ids ) ) {
+			wp_set_object_terms( $player_id, array_values( $season_ids ), 'sp_season' );
+		}
 		
 		// Set current team meta
 		update_post_meta( $player_id, 'sp_current_team', $team_id );
@@ -130,15 +143,21 @@ foreach ( $staff_names as $staff_name ) {
 	if ( $staff_id ) {
 		$team_id = $team_ids[ array_rand( $team_ids ) ];
 		wp_set_object_terms( $staff_id, [ $team_id ], 'sp_team' );
-		wp_set_object_terms( $staff_id, array_values( $season_ids ), 'sp_season' );
+		if ( ! empty( $season_ids ) ) {
+			wp_set_object_terms( $staff_id, array_values( $season_ids ), 'sp_season' );
+		}
 		wp_set_object_terms( $staff_id, array_values( $league_ids ), 'sp_league' );
 	}
 }
 
 // 7. Create Events (Matches)
 // Create a few matches for the first season and first league
-$season_id = array_values($season_ids)[0];
-$league_id = array_values($league_ids)[0];
+$season_id = ! empty( $season_ids ) ? array_values($season_ids)[0] : null;
+$league_id = ! empty( $league_ids ) ? array_values($league_ids)[0] : null;
+
+if ( ! $season_id || ! $league_id ) {
+	echo "⚠️  Skipping event creation: missing season or league IDs.\n";
+} else {
 
 for ( $i = 0; $i < 6; $i++ ) {
 	// Random home and away teams
@@ -186,10 +205,12 @@ for ( $i = 0; $i < 6; $i++ ) {
 			'post_date_gmt' => $date,
 		] );
 	}
-}
+} // end for loop
+} // end if season_id && league_id
 
 // 8. Create League Table
-$table_title = 'League Table ' . $seasons[0];
+$season_label = ! empty( $season_ids ) ? array_key_first( $season_ids ) : date('Y');
+$table_title = 'League Table ' . $season_label;
 $table_id = post_exists( $table_title, '', '', 'sp_table' );
 if ( ! $table_id ) {
 	$table_id = wp_insert_post( [
@@ -200,12 +221,16 @@ if ( ! $table_id ) {
 	echo "✅ Created Table: $table_title ($table_id)\n";
 }
 if ( $table_id ) {
-	wp_set_object_terms( $table_id, [ $league_id ], 'sp_league' );
-	wp_set_object_terms( $table_id, [ $season_id ], 'sp_season' );
+	if ( $league_id ) {
+		wp_set_object_terms( $table_id, [ $league_id ], 'sp_league' );
+	}
+	if ( $season_id ) {
+		wp_set_object_terms( $table_id, [ $season_id ], 'sp_season' );
+	}
 }
 
 // 9. Create Player List
-$list_title = 'Player List ' . $seasons[0];
+$list_title = 'Player List ' . $season_label;
 $list_id = post_exists( $list_title, '', '', 'sp_list' );
 if ( ! $list_id ) {
 	$list_id = wp_insert_post( [
@@ -216,12 +241,16 @@ if ( ! $list_id ) {
 	echo "✅ Created Player List: $list_title ($list_id)\n";
 }
 if ( $list_id ) {
-	wp_set_object_terms( $list_id, [ $league_id ], 'sp_league' );
-	wp_set_object_terms( $list_id, [ $season_id ], 'sp_season' );
+	if ( $league_id ) {
+		wp_set_object_terms( $list_id, [ $league_id ], 'sp_league' );
+	}
+	if ( $season_id ) {
+		wp_set_object_terms( $list_id, [ $season_id ], 'sp_season' );
+	}
 }
 
 // 10. Create Calendar
-$calendar_title = 'Calendar ' . $seasons[0];
+$calendar_title = 'Calendar ' . $season_label;
 $calendar_id = post_exists( $calendar_title, '', '', 'sp_calendar' );
 if ( ! $calendar_id ) {
 	$calendar_id = wp_insert_post( [
@@ -232,8 +261,12 @@ if ( ! $calendar_id ) {
 	echo "✅ Created Calendar: $calendar_title ($calendar_id)\n";
 }
 if ( $calendar_id ) {
-	wp_set_object_terms( $calendar_id, [ $league_id ], 'sp_league' );
-	wp_set_object_terms( $calendar_id, [ $season_id ], 'sp_season' );
+	if ( $league_id ) {
+		wp_set_object_terms( $calendar_id, [ $league_id ], 'sp_league' );
+	}
+	if ( $season_id ) {
+		wp_set_object_terms( $calendar_id, [ $season_id ], 'sp_season' );
+	}
 }
 
 // 11. Create Metrics

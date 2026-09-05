@@ -7,7 +7,7 @@
 - WooCommerce plugin installed and activated (required for full order flow tests)
 - WP-CLI available via `docker exec` or direct shell
 - At least one team and season exist:
-  - `wp term create sp_season "2026"`
+  - `wp term create sp_season "$(date +%Y)"` (or verify an existing current-year season exists)
   - `wp post create --post_type=sp_team --post_title="Registration Team" --post_status=publish`
 
 ## Test Cases
@@ -87,7 +87,7 @@
 
 **Steps:**
 1. On the Player Registration settings tab, locate "Auto-Season" setting
-2. Select "2026" or the current season
+2. Select the current season (current year from `date +%Y`)
 3. Save settings
 
 **Expected Result:**

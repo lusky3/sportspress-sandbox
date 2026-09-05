@@ -5,10 +5,19 @@
 - SportsPress core plugin activated
 - SPAT League Manager child plugin activated
 - WP-CLI available via `docker exec` or direct shell
-- At least one league, season, and team exist (create via WP-CLI if needed):
-  - `wp term create sp_league "Test League"`
-  - `wp term create sp_season "2026"`
-  - `wp post create --post_type=sp_team --post_title="Test Team LM" --post_status=publish`
+- At least one league, season, and team exist, with the team assigned to both (create via WP-CLI if needed):
+  - `wp term create sp_league "Test League" --allow-root`
+  - `wp term create sp_season "$(date +%Y)" --allow-root`
+  - `TEAM_ID=$(docker exec sportspress-test wp post create --post_type=sp_team --post_title="Test Team LM" --post_status=publish --porcelain --allow-root)` then assign terms:
+    - `wp post term set $TEAM_ID sp_league "Test League" --allow-root`
+    - `wp post term set $TEAM_ID sp_season "$(date +%Y)" --allow-root`
+
+  Or in a single shell block inside the container:
+  ```bash
+  TEAM_ID=$(wp post create --post_type=sp_team --post_title="Test Team LM" --post_status=publish --porcelain --allow-root)
+  wp post term set $TEAM_ID sp_league "Test League" --allow-root
+  wp post term set $TEAM_ID sp_season "$(date +%Y)" --allow-root
+  ```
 
 ## Test Cases
 
@@ -69,7 +78,7 @@
 **Steps:**
 1. Navigate to the Teams & Rosters subpage under League Manager
 2. Locate the league filter dropdown and select "Test League"
-3. Locate the season filter dropdown and select "2026"
+3. Locate the season filter dropdown and select the current year season (e.g., the value of `date +%Y`)
 4. Apply the filters
 
 **Expected Result:**
@@ -195,7 +204,7 @@
 **Steps:**
 1. Navigate to the League Manager page
 2. Select a preferred league from the dropdown (e.g., "Test League")
-3. Select a preferred season (e.g., "2026")
+3. Select a preferred season (e.g., the current year)
 4. Save or let the preference auto-save
 5. Navigate away to another admin page
 6. Return to the League Manager page
@@ -214,7 +223,7 @@
 
 **Steps:**
 1. Navigate to the League Manager settings tab (or SPAT settings > League Manager)
-2. Set "Default Season" to "2026"
+2. Set "Default Season" to the current year (e.g., `date +%Y`)
 3. Configure "Fee Source" to an available option
 4. Enable "Debug Logging"
 5. Set "Max Upload Size" to a specific value (e.g., 2MB)
