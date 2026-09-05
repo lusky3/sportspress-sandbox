@@ -13,13 +13,13 @@ RUN apk add --no-cache \
     py3-pip \
     $PHPIZE_DEPS \
     linux-headers \
-    && pip3 install "setuptools==69.5.1" --break-system-packages \
+    && pip3 install --only-binary :all: "setuptools==69.5.1" --break-system-packages \
     && pecl install xdebug \
     && docker-php-ext-enable xdebug \
     && apk del $PHPIZE_DEPS linux-headers
 
 # Install wp-cli
-RUN wget https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar \
+RUN wget --max-redirect=0 https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar \
     && chmod +x wp-cli.phar \
     && mv wp-cli.phar /usr/local/bin/wp
 
@@ -38,30 +38,31 @@ RUN cp -r /usr/src/wordpress/* /var/www/html/ \
     && mkdir -p /var/www/html/wp-content/uploads
 
 # Download and install SportsPress plugin and dev tools
-RUN cd /tmp \
-    && wget https://downloads.wordpress.org/plugin/sportspress.2.7.31.zip -O sportspress.zip \
+WORKDIR /tmp
+RUN wget --max-redirect=0 https://downloads.wordpress.org/plugin/sportspress.2.7.31.zip -O sportspress.zip \
     && unzip sportspress.zip -d /var/www/html/wp-content/plugins/ \
     && rm sportspress.zip \
-    && wget https://downloads.wordpress.org/plugin/user-switching.1.11.2.zip -O user-switching.zip \
+    && wget --max-redirect=0 https://downloads.wordpress.org/plugin/user-switching.1.12.1.zip -O user-switching.zip \
     && unzip user-switching.zip -d /var/www/html/wp-content/plugins/ \
     && rm user-switching.zip \
-    && wget https://downloads.wordpress.org/plugin/query-monitor.4.0.6.zip -O query-monitor.zip \
+    && wget --max-redirect=0 https://downloads.wordpress.org/plugin/query-monitor.4.0.7.zip -O query-monitor.zip \
     && unzip query-monitor.zip -d /var/www/html/wp-content/plugins/ \
     && rm query-monitor.zip \
-    && wget https://downloads.wordpress.org/plugin/debug-bar.1.1.8.zip -O debug-bar.zip \
+    && wget --max-redirect=0 https://downloads.wordpress.org/plugin/debug-bar.1.1.8.zip -O debug-bar.zip \
     && unzip debug-bar.zip -d /var/www/html/wp-content/plugins/ \
     && rm debug-bar.zip \
-    && wget https://downloads.wordpress.org/plugin/woocommerce.10.7.0.zip -O woocommerce.zip \
+    && wget --max-redirect=0 https://downloads.wordpress.org/plugin/woocommerce.11.0.1.zip -O woocommerce.zip \
     && unzip woocommerce.zip -d /var/www/html/wp-content/plugins/ \
     && rm woocommerce.zip \
-    && wget https://github.com/Automattic/wordpress-mcp/archive/295b5cc.zip -O wordpress-mcp.zip \
+    && curl --proto "=https" -fsSL https://github.com/Automattic/wordpress-mcp/archive/295b5cc.zip -o wordpress-mcp.zip \
     && unzip wordpress-mcp.zip -d /var/www/html/wp-content/plugins/ \
     && mv /var/www/html/wp-content/plugins/wordpress-mcp-* /var/www/html/wp-content/plugins/wordpress-mcp \
     && rm wordpress-mcp.zip \
-    && wget https://github.com/WordPress/abilities-api/archive/5f64910.zip -O abilities-api.zip \
+    && curl --proto "=https" -fsSL https://github.com/WordPress/abilities-api/archive/5f64910.zip -o abilities-api.zip \
     && unzip abilities-api.zip -d /var/www/html/wp-content/plugins/ \
     && mv /var/www/html/wp-content/plugins/abilities-api-* /var/www/html/wp-content/plugins/abilities-api \
     && rm abilities-api.zip
+WORKDIR /var/www/html
 
 # Copy configuration files from organized directories
 COPY config/wordpress/wp-config.php /var/www/html/
@@ -91,6 +92,7 @@ RUN mkdir -p /var/log/nginx /var/lib/nginx/tmp \
     && chmod -R 755 /var/www/html \
     && chown -R mysql:mysql /var/lib/mysql \
     && chown -R www-data:www-data /var/log/nginx \
+    && chown -R www-data:www-data /var/lib/nginx \
     && chown www-data:www-data /var/log/php_errors.log
 
 # Set default sport for SportsPress demo data

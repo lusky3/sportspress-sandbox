@@ -43,7 +43,7 @@ docker compose down -v
 | Service | Image | Port | Purpose |
 |---------|-------|------|---------|
 | sportspress-test | Custom (Alpine + WP) | 8082 | WordPress + SportsPress + MariaDB |
-| playwright | Custom (Playwright v1.59.1 + Chrome) | 3002 | Browser automation MCP server |
+| playwright | Custom (Playwright v1.62.1 + Chrome) | 3002 | Browser automation MCP server |
 | mailpit | axllent/mailpit | 8025 | Email capture |
 | adminer | adminer | 8088 | Database management |
 
@@ -97,8 +97,8 @@ Returns:
 ```json
 {
   "status": "ready",
-  "wordpress": "6.9.4",
-  "sportspress": "2.7.29",
+  "wordpress": "7.1.0",
+  "sportspress": "2.7.31",
   "sport": "ice-hockey",
   "plugins": ["sportspress", "woocommerce", "sportspress-admin-tools", ...],
   "theme": "rookie",
