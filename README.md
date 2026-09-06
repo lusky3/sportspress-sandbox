@@ -97,7 +97,7 @@ Returns:
 ```json
 {
   "status": "ready",
-  "wordpress": "6.9.4",
+  "wordpress": "7.1.0",
   "sportspress": "2.7.29",
   "sport": "ice-hockey",
   "plugins": ["sportspress", "woocommerce", "sportspress-admin-tools", ...],
