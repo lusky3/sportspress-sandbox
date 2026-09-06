@@ -24,8 +24,16 @@ services:
     ports:
       - "8082:80"
     volumes:
-      # Mount the SportsPress Admin Tools plugin from sibling directory
-      - ../SportsPress-Admin-Tools:/var/www/html/wp-content/plugins/sportspress-admin-tools
+      # Mount each SportsPress Admin Tools plugin from the sibling repo individually —
+      # do NOT mount the whole monorepo as one plugin (see Task 6 fix).
+      - ../SportsPress-Admin-Tools/sportspress-admin-tools:/var/www/html/wp-content/plugins/sportspress-admin-tools
+      - ../SportsPress-Admin-Tools/sportspress-etransfer-automation:/var/www/html/wp-content/plugins/sportspress-etransfer-automation
+      - ../SportsPress-Admin-Tools/sportspress-events-manager:/var/www/html/wp-content/plugins/sportspress-events-manager
+      - ../SportsPress-Admin-Tools/sportspress-league-manager:/var/www/html/wp-content/plugins/sportspress-league-manager
+      - ../SportsPress-Admin-Tools/sportspress-player-registration:/var/www/html/wp-content/plugins/sportspress-player-registration
+      - ../SportsPress-Admin-Tools/sportspress-player-tools:/var/www/html/wp-content/plugins/sportspress-player-tools
+      - ../SportsPress-Admin-Tools/sportspress-schedule-generator:/var/www/html/wp-content/plugins/sportspress-schedule-generator
+      - ../SportsPress-Admin-Tools/sportspress-score-sheets:/var/www/html/wp-content/plugins/sportspress-score-sheets
       - baseline:/var/lib/baseline
       - screenshots:/screenshots
       - test-results:/test-results
