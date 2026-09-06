@@ -83,7 +83,10 @@ RUN mkdir -p /dev/shm && chmod 1777 /dev/shm
 COPY config/scripts/setup-test-data.sh /usr/local/bin/
 COPY config/scripts/start.sh /usr/local/bin/
 COPY config/scripts/generate-extra-data.php /usr/local/bin/
-RUN chmod +x /usr/local/bin/setup-test-data.sh /usr/local/bin/start.sh
+COPY config/scripts/fixtures-registration.sh /usr/local/bin/
+COPY config/scripts/fixtures-waitlist.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/setup-test-data.sh /usr/local/bin/start.sh \
+    /usr/local/bin/fixtures-registration.sh /usr/local/bin/fixtures-waitlist.sh
 
 # Create necessary directories and set proper permissions
 RUN mkdir -p /var/log/nginx /var/lib/nginx/tmp \
