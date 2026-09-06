@@ -241,6 +241,28 @@ if wp plugin is-installed woocommerce --allow-root 2>/dev/null; then
     echo "✅ WooCommerce products created"
 fi
 
+# Enable the league_waitlist module (and its dashboard) by default so the
+# League Dashboard is reachable out of the box instead of 404ing.
+echo "Enabling league_waitlist module and provisioning the League Dashboard page..."
+wp eval '
+update_option(
+	"spat_enabled_modules",
+	array_values(
+		array_unique(
+			array_merge(
+				(array) get_option( "spat_enabled_modules", array() ),
+				array( "league_manager_dashboard", "league_waitlist" )
+			)
+		)
+	)
+);
+do_action( "init" );
+if ( class_exists( "SPLM_Dashboard_Frontend" ) ) {
+	$page_id = SPLM_Dashboard_Frontend::ensure_page();
+	printf( "League Dashboard page: %d (%s)\n", $page_id, $page_id ? get_permalink( $page_id ) : "FAILED" );
+}
+' --allow-root
+
 # Export database baseline for test state reset
 # Agents can restore this snapshot between test suites to ensure clean state.
 echo "Exporting database baseline snapshot..."
