@@ -7,7 +7,7 @@ on:
 
 jobs:
   check-updates:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
       actions: write
@@ -139,7 +139,7 @@ jobs:
   test-updates:
     needs: check-updates
     if: needs.check-updates.outputs.pr-created == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     steps:
