@@ -11,7 +11,13 @@ set -euo pipefail
 # Usage (from the host):
 #   docker exec sportspress-test bash /usr/local/bin/fixtures-freescout-bridge.sh <secret>
 #
-# Prints one line of JSON: {"email":"...","player_ids":[...],"team":"Ducks"}
+# Also seeds e-Transfer rows (matched, unmatched, mismatch), an on-hold order
+# totalling 325.00 and two WP users (admin@example.test administrator,
+# nocap@example.test subscriber).
+#
+# Prints one line of JSON: {"email":"...","player_ids":[...],"team":"Ducks",
+# "etransfer_log_id":..,"possible_match_log_id":..,"mismatch_log_id":..,
+# "matched_log_id":..,"on_hold_order_id":..,"agent_email":"..","nocap_email":".."}
 
 if [ $# -lt 1 ] || [ -z "$1" ]; then
 	echo "usage: $0 <freescout-shared-secret>" >&2
@@ -30,7 +36,7 @@ update_option(
 		array_unique(
 			array_merge(
 				(array) get_option( "spat_enabled_modules", array() ),
-				array( "player_modifications", "player_registration" )
+				array( "player_modifications", "player_registration", "etransfer_automation" )
 			)
 		)
 	)
@@ -255,7 +261,155 @@ spb_log( $processed, "player_created", $jordan, 1, "2026-09-03 14:02:00" );
 $attention = spb_order( "attention", false, $reg_product );
 spb_log( $attention, "name_rejected", null, 0, "2026-09-10 09:30:00" );
 
-echo wp_json_encode( array( "email" => $email, "player_ids" => array( $jordan, $riley ), "team" => "Ducks" ) );
+// Agent accounts: the FreeScout e2e admin (administrator) and an agent with no
+// WooCommerce capability, for the forbidden path. Passwords are random and
+// never printed; the bridge authenticates with the shared secret, not them.
+function spb_user( $login, $user_email, $role ) {
+	$existing = get_user_by( "email", $user_email );
+	if ( $existing ) {
+		return (int) $existing->ID;
+	}
+	$id = wp_insert_user(
+		array(
+			"user_login"   => $login,
+			"user_email"   => $user_email,
+			"user_pass"    => wp_generate_password( 24 ),
+			"display_name" => $login,
+			"role"         => $role,
+		)
+	);
+	if ( is_wp_error( $id ) ) {
+		fwrite( STDERR, $id->get_error_message() . "\n" );
+		exit( 1 );
+	}
+	return (int) $id;
+}
+
+$agent_email = "admin@example.test";
+$nocap_email = "nocap@example.test";
+spb_user( "fixture-agent", $agent_email, "administrator" );
+spb_user( "fixture-nocap", $nocap_email, "subscriber" );
+
+// e-Transfer fixtures. A plain item (not a registration product) priced 325,
+// so the on-hold order totals the amount of the unmatched transfer.
+$found = get_posts(
+	array(
+		"post_type"      => "product",
+		"title"          => "FreeScout Bridge e-Transfer Test Item",
+		"post_status"    => "any",
+		"posts_per_page" => 1,
+		"fields"         => "ids",
+	)
+);
+if ( $found ) {
+	$et_product = (int) $found[0];
+} else {
+	$product = new WC_Product_Simple();
+	$product->set_name( "FreeScout Bridge e-Transfer Test Item" );
+	$product->set_regular_price( "325" );
+	$product->set_price( "325" );
+	$product->set_virtual( true );
+	$product->set_status( "publish" );
+	$et_product = (int) $product->save();
+}
+
+// The on-hold order is created without firing status-transition handlers
+// (emails, stock, e-Transfer automation), like the completed orders above.
+function spb_on_hold_order( $product_id ) {
+	$found = wc_get_orders(
+		array(
+			"limit"      => 1,
+			"return"     => "ids",
+			"meta_key"   => "_spb_fixture",
+			"meta_value" => "on-hold",
+		)
+	);
+	if ( $found ) {
+		return (int) $found[0];
+	}
+	global $wp_filter;
+	$hooks = array(
+		"woocommerce_order_status_changed",
+		"woocommerce_order_status_on-hold",
+		"woocommerce_order_status_pending_to_on-hold",
+		"woocommerce_new_order",
+	);
+	$saved = array();
+	foreach ( $hooks as $hook ) {
+		if ( isset( $wp_filter[ $hook ] ) ) {
+			$saved[ $hook ] = $wp_filter[ $hook ];
+			unset( $wp_filter[ $hook ] );
+		}
+	}
+
+	try {
+		$order = wc_create_order();
+		$order->add_product( wc_get_product( $product_id ), 1, array( "subtotal" => 325, "total" => 325 ) );
+		$order->set_billing_email( "fixture-bridge@example.test" );
+		$order->set_billing_first_name( "Jordan" );
+		$order->set_billing_last_name( "Smith" );
+		$order->update_meta_data( "_spb_fixture", "on-hold" );
+		$order->calculate_totals();
+		$order->set_status( "on-hold" );
+		$order->save();
+	} finally {
+		foreach ( $saved as $hook => $callbacks ) {
+			$wp_filter[ $hook ] = $callbacks;
+		}
+	}
+	return (int) $order->get_id();
+}
+
+function spb_etransfer( $reference, $from_email, $from_name, $amount, $ts, $order_id, $result ) {
+	global $wpdb;
+	$table = $wpdb->prefix . "spat_etransfer_logs";
+	$id    = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$table} WHERE reference_number=%s", $reference ) );
+	if ( $id ) {
+		return (int) $id;
+	}
+	$wpdb->insert(
+		$table,
+		array(
+			"timestamp"        => $ts,
+			"from_email"       => $from_email,
+			"from_name"        => $from_name,
+			"amount"           => $amount,
+			"reference_number" => $reference,
+			"match_criteria"   => "fixture",
+			"order_id"         => $order_id,
+			"result"           => $result,
+		)
+	);
+	return (int) $wpdb->insert_id;
+}
+
+$on_hold    = spb_on_hold_order( $et_product );
+$on_hold_ts = (int) wc_get_order( $on_hold )->get_date_created()->getTimestamp();
+$no_match   = "No matching order found";
+$utc        = "Y-m-d H:i:s";
+
+// Matched: points at the processed order, with the result the manual match writes.
+$matched_log = spb_etransfer( "FIXTURE-MATCHED", $email, "Jordan Smith", 325.00, gmdate( $utc, $on_hold_ts - 5 * DAY_IN_SECONDS ), $processed, "Manually matched and processed successfully" );
+// Unmatched from another payer, one day after the on-hold order: the possible
+// match for it (same amount, inside its window).
+$unmatched_log = spb_etransfer( "FIXTURE-UNMATCHED", "payer-other@example.test", "Pat Smith", 325.00, gmdate( $utc, $on_hold_ts + DAY_IN_SECONDS ), null, $no_match );
+// Unmatched from the customer, amount that differs from the on-hold order.
+$mismatch_log = spb_etransfer( "FIXTURE-MISMATCH", $email, "Jordan Smith", 300.00, gmdate( $utc, $on_hold_ts + 2 * DAY_IN_SECONDS ), null, $no_match );
+
+echo wp_json_encode(
+	array(
+		"email"                 => $email,
+		"player_ids"            => array( $jordan, $riley ),
+		"team"                  => "Ducks",
+		"etransfer_log_id"      => $unmatched_log,
+		"possible_match_log_id" => $unmatched_log,
+		"mismatch_log_id"       => $mismatch_log,
+		"matched_log_id"        => $matched_log,
+		"on_hold_order_id"      => $on_hold,
+		"agent_email"           => $agent_email,
+		"nocap_email"           => $nocap_email,
+	)
+);
 ' --allow-root)
 
 printf '%s\n' "$OUT" | tail -n 1
