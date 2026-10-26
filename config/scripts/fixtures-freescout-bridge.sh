@@ -19,15 +19,31 @@ set -euo pipefail
 # totalling 325.00 and two WP users (admin@example.test administrator,
 # nocap@example.test subscriber).
 #
+# Also seeds waitlist rows (a queued player entry and an expired goalie entry
+# for the fixture email, target = a "S2026 Player Registration" product), a
+# "Casey Change" player + WP user (change-me@example.test) with one completed
+# order for the change-email action, enables league_waitlist, and installs the
+# spb-mail-capture mu-plugin (ALL wp_mail() in the sandbox is then captured to
+# option spb_captured_mail instead of sent, from the next request on).
+#
 # Prints one line of JSON: {"email":"...","player_ids":[...],"team":"Ducks",
 # "etransfer_log_id":..,"possible_match_log_id":..,"mismatch_log_id":..,
 # "matched_log_id":..,"on_hold_order_id":..,"agent_email":"..","nocap_email":"..",
-# "events_enabled":true|false}
+# "events_enabled":true|false,"waitlist_queued_id":..,"waitlist_expired_id":..,
+# "change_email_player_id":..,"change_email":"change-me@example.test"}
 
 if [ $# -lt 1 ] || [ -z "$1" ]; then
 	echo "usage: $0 <freescout-shared-secret> [events-url]" >&2
 	exit 1
 fi
+
+# Install the mail-capture mu-plugin (active from the next request on) and make
+# sure league-manager, which owns the waitlist, is active.
+MU_DIR=/var/www/html/wp-content/mu-plugins
+mkdir -p "$MU_DIR"
+cp /usr/local/bin/spb-mail-capture.php "$MU_DIR/spb-mail-capture.php"
+wp plugin is-active sportspress-league-manager --allow-root >/dev/null 2>&1 \
+	|| wp plugin activate sportspress-league-manager --allow-root >/dev/null 2>&1 || true
 
 # wp eval chatter (notices, deprecations) must not pollute the single JSON line,
 # so capture stdout and keep only its last line.
@@ -54,7 +70,7 @@ update_option(
 		array_unique(
 			array_merge(
 				(array) get_option( "spat_enabled_modules", array() ),
-				array( "player_modifications", "player_registration", "etransfer_automation" )
+				array( "player_modifications", "player_registration", "etransfer_automation", "league_waitlist" )
 			)
 		)
 	)
@@ -206,7 +222,7 @@ if ( $found ) {
 // orders on woocommerce_order_status_completed; letting it run would
 // create/link players and write its own logs, corrupting the fixture. Detach
 // the hook for the save.
-function spb_order( $tag, $processed, $product_id ) {
+function spb_order( $tag, $processed, $product_id, $bill_email = "fixture-bridge@example.test", $first = "Jordan", $last = "Smith" ) {
 	$found = wc_get_orders(
 		array(
 			"limit"      => 1,
@@ -233,9 +249,9 @@ function spb_order( $tag, $processed, $product_id ) {
 	try {
 		$order = wc_create_order();
 		$order->add_product( wc_get_product( $product_id ), 1 );
-		$order->set_billing_email( "fixture-bridge@example.test" );
-		$order->set_billing_first_name( "Jordan" );
-		$order->set_billing_last_name( "Smith" );
+		$order->set_billing_email( $bill_email );
+		$order->set_billing_first_name( $first );
+		$order->set_billing_last_name( $last );
 		$order->update_meta_data( "_spb_fixture", $tag );
 		if ( $processed ) {
 			$order->update_meta_data( "_spr_processed", "1" );
@@ -422,6 +438,73 @@ $unmatched_log = spb_etransfer( "FIXTURE-UNMATCHED", "payer-other@example.test",
 // Unmatched from the customer, amount that differs from the on-hold order.
 $mismatch_log = spb_etransfer( "FIXTURE-MISMATCH", $email, "Jordan Smith", 300.00, gmdate( $utc, $on_hold_ts + 2 * DAY_IN_SECONDS ), null, $no_match );
 
+// Waitlist target: the product waitlist offers send the player to.
+$found = get_posts(
+	array(
+		"post_type"      => "product",
+		"title"          => "S2026 Player Registration",
+		"post_status"    => "any",
+		"posts_per_page" => 1,
+		"fields"         => "ids",
+	)
+);
+if ( $found ) {
+	$wl_product = (int) $found[0];
+} else {
+	$product = new WC_Product_Simple();
+	$product->set_name( "S2026 Player Registration" );
+	$product->set_regular_price( "0" );
+	$product->set_price( "0" );
+	$product->set_virtual( true );
+	$product->set_status( "publish" );
+	$product->set_category_ids( array( $reg_cat ) );
+	$product->set_tag_ids( array( $player_tag ) );
+	$wl_product = (int) $product->save();
+}
+
+// Waitlist rows, guarded by email + season + position (one fixture row each).
+// The table is created on plugins_loaded once the module is on, which is after
+// this process started, so create it here when missing.
+if ( class_exists( "SPLM_Waitlist_Database" ) && ! SPLM_Waitlist_Database::table_exists() ) {
+	SPLM_Waitlist_Database::create_table();
+}
+function spb_waitlist( $position, $status, $target, $name, $wl_email, $offered_at, $expires_at ) {
+	global $wpdb;
+	$table = SPLM_Waitlist_Database::table_name();
+	$id    = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$table} WHERE email=%s AND season=%s AND position=%s ORDER BY id LIMIT 1", strtolower( $wl_email ), "S2026", $position ) );
+	if ( $id ) {
+		return (int) $id;
+	}
+	$id = SPLM_Waitlist_Database::insert(
+		array(
+			"season"              => "S2026",
+			"position"            => $position,
+			"waitlist_product_id" => 0,
+			"target_product_id"   => $target,
+			"name"                => $name,
+			"email"               => strtolower( $wl_email ),
+			"status"              => $status,
+			"offered_at"          => $offered_at,
+			"expires_at"          => $expires_at,
+		)
+	);
+	if ( ! $id ) {
+		fwrite( STDERR, "waitlist insert failed: " . $wpdb->last_error . "\n" );
+		exit( 1 );
+	}
+	return (int) $id;
+}
+$wl_queued  = spb_waitlist( "player", "queued", $wl_product, "Jordan Smith", $email, null, null );
+$wl_expired = spb_waitlist( "goalie", "expired", $wl_product, "Jordan Smith", $email, gmdate( "Y-m-d H:i:s", time() - 3 * DAY_IN_SECONDS ), gmdate( "Y-m-d H:i:s", time() - DAY_IN_SECONDS ) );
+
+// Change-email fixture: a player, a linked WP user and one completed order, all
+// on change-me@example.test. The order is created without registration firing.
+$change_email = "change-me@example.test";
+$casey        = spb_player( "Casey Change", 9, $change_email, $ducks, $league_id, $season_id, $forward );
+$casey_user   = spb_user( "fixture-casey", $change_email, "subscriber" );
+update_post_meta( $casey, "sp_user", $casey_user );
+spb_order( "change-email", true, $reg_product, $change_email, "Casey", "Change" );
+
 echo wp_json_encode(
 	array(
 		"email"                 => $email,
@@ -435,6 +518,10 @@ echo wp_json_encode(
 		"agent_email"           => $agent_email,
 		"nocap_email"           => $nocap_email,
 		"events_enabled"        => $events_enabled,
+		"waitlist_queued_id"    => $wl_queued,
+		"waitlist_expired_id"   => $wl_expired,
+		"change_email_player_id" => $casey,
+		"change_email"          => $change_email,
 	)
 );
 ' --allow-root)
