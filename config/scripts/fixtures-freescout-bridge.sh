@@ -300,6 +300,21 @@ spb_log( $attention, "name_rejected", null, 0, "2026-09-10 09:30:00" );
 // never printed; the bridge authenticates with the shared secret, not them.
 function spb_user( $login, $user_email, $role ) {
 	$existing = get_user_by( "email", $user_email );
+	if ( ! $existing ) {
+		// The login may survive with another email (a change-email run changed it):
+		// restore the expected one, without WordPress sending an email-changed notice.
+		$existing = get_user_by( "login", $login );
+		if ( $existing ) {
+			add_filter( "send_email_change_email", "__return_false" );
+			$res = wp_update_user( array( "ID" => $existing->ID, "user_email" => $user_email ) );
+			remove_filter( "send_email_change_email", "__return_false" );
+			if ( is_wp_error( $res ) ) {
+				fwrite( STDERR, $res->get_error_message() . "\n" );
+				exit( 1 );
+			}
+			$existing = get_user_by( "id", $existing->ID );
+		}
+	}
 	if ( $existing ) {
 		// Correct the role of an account left over with a different one.
 		if ( array( $role ) !== array_values( $existing->roles ) ) {
@@ -500,10 +515,33 @@ $wl_expired = spb_waitlist( "goalie", "expired", $wl_product, "Jordan Smith", $e
 // Change-email fixture: a player, a linked WP user and one completed order, all
 // on change-me@example.test. The order is created without registration firing.
 $change_email = "change-me@example.test";
+global $wpdb;
 $casey        = spb_player( "Casey Change", 9, $change_email, $ducks, $league_id, $season_id, $forward );
 $casey_user   = spb_user( "fixture-casey", $change_email, "subscriber" );
 update_post_meta( $casey, "sp_user", $casey_user );
-spb_order( "change-email", true, $reg_product, $change_email, "Casey", "Change" );
+// Last, after the user update: profile hooks may have rewritten it.
+update_post_meta( $casey, "spt_email", $change_email );
+$change_order = spb_order( "change-email", true, $reg_product, $change_email, "Casey", "Change" );
+// A change-email run alters these; put them back on every run.
+$co = wc_get_order( $change_order );
+if ( strtolower( (string) $co->get_billing_email() ) !== $change_email ) {
+	$co->set_billing_email( $change_email );
+	$co->save();
+}
+
+// Reset the waitlist rows to their seed state (ids stay), whatever an offer did.
+$wl_table = SPLM_Waitlist_Database::table_name();
+$wpdb->query( $wpdb->prepare( "UPDATE {$wl_table} SET status=%s, claim_token=NULL, offered_at=NULL, expires_at=NULL, offer_message=%s, dispatched_by=0, resolved_order_id=NULL WHERE id=%d", "queued", "", $wl_queued ) );
+$wpdb->update(
+	$wl_table,
+	array(
+		"status"     => "expired",
+		"offered_at" => gmdate( "Y-m-d H:i:s", time() - 3 * DAY_IN_SECONDS ),
+		"expires_at" => gmdate( "Y-m-d H:i:s", time() - DAY_IN_SECONDS ),
+	),
+	array( "id" => $wl_expired )
+);
+wp_clear_scheduled_hook( SPLM_Waitlist_Expiry::EXPIRE_HOOK, array( $wl_queued ) );
 
 echo wp_json_encode(
 	array(
