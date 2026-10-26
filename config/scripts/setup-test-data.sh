@@ -5,20 +5,10 @@ set -e
 
 echo "🏗️ Setting up WordPress and SportsPress test data..."
 
-# Skip setup if already completed (check DB state, not file — the baseline
-# volume persists across container recreations but MySQL data does not).
-if mysql --socket=/run/mysqld/mysqld.sock -e "SELECT 1 FROM wordpress.wp_options LIMIT 1" >/dev/null 2>&1; then
-    echo "✅ WordPress tables exist. Skipping setup."
-    # Re-export baseline in case DB was restored from a previous run
-    mkdir -p /var/lib/baseline
-    wp db export /var/lib/baseline/baseline.sql --allow-root 2>/dev/null || true
-    exit 0
-fi
-
-DB_HOST=${WORDPRESS_DB_HOST:-localhost}
-
 # Wait for database — check that MariaDB accepts connections via the
-# same socket path WordPress uses, not just a TCP ping.
+# same socket path WordPress uses, not just a TCP ping. This runs before
+# the skip check: supervisor starts this script alongside MariaDB, and a failed
+# query there would be read as "no tables" and re-run the full setup.
 echo "Waiting for database..."
 for i in {1..30}; do
     if mysql --socket=/run/mysqld/mysqld.sock -e "SELECT 1" >/dev/null 2>&1; then
@@ -32,6 +22,18 @@ for i in {1..30}; do
     fi
     sleep 2
 done
+
+# Skip setup if already completed (check DB state, not file — the baseline
+# volume persists across container recreations but MySQL data does not).
+if mysql --socket=/run/mysqld/mysqld.sock -e "SELECT 1 FROM wordpress.wp_options LIMIT 1" >/dev/null 2>&1; then
+    echo "✅ WordPress tables exist. Skipping setup."
+    # Re-export baseline in case DB was restored from a previous run
+    mkdir -p /var/lib/baseline
+    wp db export /var/lib/baseline/baseline.sql --allow-root 2>/dev/null || true
+    exit 0
+fi
+
+DB_HOST=${WORDPRESS_DB_HOST:-localhost}
 
 # Initialize database (only for internal)
 if [[ "$DB_HOST" == "localhost"* ]] || [[ "$DB_HOST" == "127.0.0.1"* ]]; then
