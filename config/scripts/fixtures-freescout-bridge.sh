@@ -267,6 +267,10 @@ spb_log( $attention, "name_rejected", null, 0, "2026-09-10 09:30:00" );
 function spb_user( $login, $user_email, $role ) {
 	$existing = get_user_by( "email", $user_email );
 	if ( $existing ) {
+		// Correct the role of an account left over with a different one.
+		if ( array( $role ) !== array_values( $existing->roles ) ) {
+			$existing->set_role( $role );
+		}
 		return (int) $existing->ID;
 	}
 	$id = wp_insert_user(
@@ -367,7 +371,7 @@ function spb_etransfer( $reference, $from_email, $from_name, $amount, $ts, $orde
 	if ( $id ) {
 		return (int) $id;
 	}
-	$wpdb->insert(
+	$ok = $wpdb->insert(
 		$table,
 		array(
 			"timestamp"        => $ts,
@@ -380,6 +384,10 @@ function spb_etransfer( $reference, $from_email, $from_name, $amount, $ts, $orde
 			"result"           => $result,
 		)
 	);
+	if ( false === $ok ) {
+		fwrite( STDERR, "e-Transfer insert failed: " . $wpdb->last_error . "\n" );
+		exit( 1 );
+	}
 	return (int) $wpdb->insert_id;
 }
 
