@@ -4,7 +4,8 @@ set -euo pipefail
 # Creates the known player scenario the FreeScout SPAT bridge's end-to-end test
 # asserts against: a shared email on two players (Jordan Smith / Riley Smith), a
 # captain, a future-dated next game, one processed registration order and one
-# completed-but-unprocessed order (the "needs attention" case). Idempotent: every
+# completed-but-unprocessed registration order (the "needs attention" case); both
+# hold a product from the "Registration" category. Idempotent: every
 # insert is guarded, so a re-run changes nothing and prints the same ids.
 #
 # Usage (from the host):
@@ -149,10 +150,39 @@ wp_set_object_terms( $event_id, array( $venue_id ), "sp_venue" );
 wp_set_object_terms( $event_id, array( $league_id ), "sp_league" );
 wp_set_object_terms( $event_id, array( $season_id ), "sp_season" );
 
-// Completed orders. The registration plugin processes completed orders on
-// woocommerce_order_status_completed; letting it run would create/link players
-// and write its own logs, corrupting the fixture. Detach the hook for the save.
-function spb_order( $tag, $processed ) {
+// A registration product: SPAT counts an order as a registration only when a
+// line item is in a product category whose name holds the registration keyword
+// (default "registration"), the same way fixtures-registration.sh sets it up.
+$reg_cat    = spb_term( "Registration", "product_cat" );
+$player_tag = spb_term( "Player", "product_tag" );
+$found      = get_posts(
+	array(
+		"post_type"      => "product",
+		"title"          => "FreeScout Bridge Registration (S2026)",
+		"post_status"    => "any",
+		"posts_per_page" => 1,
+		"fields"         => "ids",
+	)
+);
+if ( $found ) {
+	$reg_product = (int) $found[0];
+} else {
+	$product = new WC_Product_Simple();
+	$product->set_name( "FreeScout Bridge Registration (S2026)" );
+	$product->set_regular_price( "0" );
+	$product->set_price( "0" );
+	$product->set_virtual( true );
+	$product->set_status( "publish" );
+	$product->set_category_ids( array( $reg_cat ) );
+	$product->set_tag_ids( array( $player_tag ) );
+	$reg_product = (int) $product->save();
+}
+
+// Completed registration orders. The registration plugin processes completed
+// orders on woocommerce_order_status_completed; letting it run would
+// create/link players and write its own logs, corrupting the fixture. Detach
+// the hook for the save.
+function spb_order( $tag, $processed, $product_id ) {
 	$found = wc_get_orders(
 		array(
 			"limit"      => 1,
@@ -162,6 +192,13 @@ function spb_order( $tag, $processed ) {
 		)
 	);
 	if ( $found ) {
+		// Orders from an older run of this script have no line items. Adding
+		// one changes no status, so the completed hook does not fire.
+		$order = wc_get_order( (int) $found[0] );
+		if ( ! $order->get_items() ) {
+			$order->add_product( wc_get_product( $product_id ), 1 );
+			$order->save();
+		}
 		return (int) $found[0];
 	}
 	global $wp_filter;
@@ -169,19 +206,23 @@ function spb_order( $tag, $processed ) {
 	$saved = isset( $wp_filter[ $hook ] ) ? $wp_filter[ $hook ] : null;
 	unset( $wp_filter[ $hook ] );
 
-	$order = wc_create_order();
-	$order->set_billing_email( "fixture-bridge@example.test" );
-	$order->set_billing_first_name( "Jordan" );
-	$order->set_billing_last_name( "Smith" );
-	$order->update_meta_data( "_spb_fixture", $tag );
-	if ( $processed ) {
-		$order->update_meta_data( "_spr_processed", "1" );
-	}
-	$order->set_status( "completed" );
-	$order->save();
-
-	if ( null !== $saved ) {
-		$wp_filter[ $hook ] = $saved;
+	try {
+		$order = wc_create_order();
+		$order->add_product( wc_get_product( $product_id ), 1 );
+		$order->set_billing_email( "fixture-bridge@example.test" );
+		$order->set_billing_first_name( "Jordan" );
+		$order->set_billing_last_name( "Smith" );
+		$order->update_meta_data( "_spb_fixture", $tag );
+		if ( $processed ) {
+			$order->update_meta_data( "_spr_processed", "1" );
+		}
+		$order->calculate_totals();
+		$order->set_status( "completed" );
+		$order->save();
+	} finally {
+		if ( null !== $saved ) {
+			$wp_filter[ $hook ] = $saved;
+		}
 	}
 	return (int) $order->get_id();
 }
@@ -208,10 +249,10 @@ function spb_log( $order_id, $action, $player_id, $links, $ts ) {
 	);
 }
 
-$processed = spb_order( "processed", true );
+$processed = spb_order( "processed", true, $reg_product );
 spb_log( $processed, "player_created", $jordan, 1, "2026-09-03 14:02:00" );
 
-$attention = spb_order( "attention", false );
+$attention = spb_order( "attention", false, $reg_product );
 spb_log( $attention, "name_rejected", null, 0, "2026-09-10 09:30:00" );
 
 echo wp_json_encode( array( "email" => $email, "player_ids" => array( $jordan, $riley ), "team" => "Ducks" ) );
