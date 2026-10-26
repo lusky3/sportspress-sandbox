@@ -9,7 +9,11 @@ set -euo pipefail
 # insert is guarded, so a re-run changes nothing and prints the same ids.
 #
 # Usage (from the host):
-#   docker exec sportspress-test bash /usr/local/bin/fixtures-freescout-bridge.sh <secret>
+#   docker exec sportspress-test bash /usr/local/bin/fixtures-freescout-bridge.sh <secret> [events-url]
+#
+# With an events URL, also sets spat_freescout_events_url and enables events
+# (spat_freescout_events_enabled=1). Without one, events are disabled and the
+# URL option is deleted.
 #
 # Also seeds e-Transfer rows (matched, unmatched, mismatch), an on-hold order
 # totalling 325.00 and two WP users (admin@example.test administrator,
@@ -17,19 +21,33 @@ set -euo pipefail
 #
 # Prints one line of JSON: {"email":"...","player_ids":[...],"team":"Ducks",
 # "etransfer_log_id":..,"possible_match_log_id":..,"mismatch_log_id":..,
-# "matched_log_id":..,"on_hold_order_id":..,"agent_email":"..","nocap_email":".."}
+# "matched_log_id":..,"on_hold_order_id":..,"agent_email":"..","nocap_email":"..",
+# "events_enabled":true|false}
 
 if [ $# -lt 1 ] || [ -z "$1" ]; then
-	echo "usage: $0 <freescout-shared-secret>" >&2
+	echo "usage: $0 <freescout-shared-secret> [events-url]" >&2
 	exit 1
 fi
 
 # wp eval chatter (notices, deprecations) must not pollute the single JSON line,
 # so capture stdout and keep only its last line.
-OUT=$(SPB_SECRET="$1" wp eval '
+OUT=$(SPB_SECRET="$1" SPB_EVENTS_URL="${2:-}" wp eval '
 $email = "fixture-bridge@example.test";
 
 update_option( "spat_freescout_secret", getenv( "SPB_SECRET" ) );
+
+// Events are on only when an events URL is given. Without one, the URL option
+// is deleted too, so the state is the same as on a fresh install.
+$events_url = (string) getenv( "SPB_EVENTS_URL" );
+if ( "" !== $events_url ) {
+	update_option( "spat_freescout_events_url", esc_url_raw( $events_url ) );
+	update_option( "spat_freescout_events_enabled", "1" );
+} else {
+	delete_option( "spat_freescout_events_url" );
+	update_option( "spat_freescout_events_enabled", "0" );
+}
+$events_enabled = "" !== $events_url;
+
 update_option(
 	"spat_enabled_modules",
 	array_values(
@@ -416,6 +434,7 @@ echo wp_json_encode(
 		"on_hold_order_id"      => $on_hold,
 		"agent_email"           => $agent_email,
 		"nocap_email"           => $nocap_email,
+		"events_enabled"        => $events_enabled,
 	)
 );
 ' --allow-root)
