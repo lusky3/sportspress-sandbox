@@ -6,7 +6,10 @@ set -euo pipefail
 # captain, a future-dated next game, one processed registration order and one
 # completed-but-unprocessed registration order (the "needs attention" case); both
 # hold a product from the "Registration" category. Idempotent: every
-# insert is guarded, so a re-run changes nothing and prints the same ids.
+# insert is guarded and a re-run prints the same ids. A re-run also restores what a
+# test may have changed: the e-Transfer rows and the on-hold order (seed state
+# after a match), the next game's date (7 days ahead again), the waitlist rows
+# and the change-email player, user and order. Any failed DB write exits non-zero.
 #
 # Usage (from the host):
 #   docker exec sportspress-test bash /usr/local/bin/fixtures-freescout-bridge.sh <secret> [events-url]
@@ -75,6 +78,21 @@ update_option(
 		)
 	)
 );
+
+function spb_fail( $message ) {
+	fwrite( STDERR, $message . "\n" );
+	exit( 1 );
+}
+
+// Fail fast on a failed $wpdb write ($res === false), like spb_term/spb_post.
+function spb_db_check( $res, $what ) {
+	global $wpdb;
+	if ( false === $res ) {
+		fwrite( STDERR, $what . " failed: " . $wpdb->last_error . "\n" );
+		exit( 1 );
+	}
+	return $res;
+}
 
 function spb_term( $name, $taxonomy ) {
 	$term = get_term_by( "name", $name, $taxonomy );
@@ -170,7 +188,9 @@ wp_set_object_terms( $list_id, array( $season_id ), "sp_season" );
 wp_set_object_terms( $list_id, array( $league_id ), "sp_league" );
 update_post_meta( $ducks, "sp_list", $list_id );
 
-// Next game: future-dated, 7 days ahead at 21:45 site time (set once, on insert).
+// Next game: future-dated, 7 days ahead at 21:45 site time. The post is found by
+// title, so it is re-dated on every run: a re-run after the first date has
+// passed must not leave it in the past.
 $when = new DateTime( "now", wp_timezone() );
 $when->modify( "+7 days" )->setTime( 21, 45, 0 );
 $event_id = spb_post(
@@ -182,6 +202,20 @@ $event_id = spb_post(
 		"post_date_gmt" => gmdate( "Y-m-d H:i:s", $when->getTimestamp() ),
 	)
 );
+$res = wp_update_post(
+	array(
+		"ID"            => $event_id,
+		"post_status"   => "future",
+		"post_date"     => $when->format( "Y-m-d H:i:s" ),
+		"post_date_gmt" => gmdate( "Y-m-d H:i:s", $when->getTimestamp() ),
+		"edit_date"     => true,
+	),
+	true
+);
+if ( is_wp_error( $res ) ) {
+	fwrite( STDERR, $res->get_error_message() . "\n" );
+	exit( 1 );
+}
 if ( ! get_post_meta( $event_id, "sp_team", false ) ) {
 	add_post_meta( $event_id, "sp_team", $ducks );
 	add_post_meta( $event_id, "sp_team", $otters );
@@ -278,7 +312,7 @@ function spb_log( $order_id, $action, $player_id, $links, $ts, $name = "Jordan S
 	if ( $exists ) {
 		return;
 	}
-	$wpdb->insert(
+	$ok = $wpdb->insert(
 		$table,
 		array(
 			"timestamp"      => $ts,
@@ -291,6 +325,7 @@ function spb_log( $order_id, $action, $player_id, $links, $ts, $name = "Jordan S
 			"links_to_order" => $links,
 		)
 	);
+	spb_db_check( $ok, "registration log insert" );
 }
 
 $processed = spb_order( "processed", true, $reg_product );
@@ -385,14 +420,12 @@ function spb_on_hold_order( $product_id ) {
 			"meta_value" => "on-hold",
 		)
 	);
-	if ( $found ) {
-		return (int) $found[0];
-	}
 	global $wp_filter;
 	$hooks = array(
 		"woocommerce_order_status_changed",
 		"woocommerce_order_status_on-hold",
 		"woocommerce_order_status_pending_to_on-hold",
+		"woocommerce_order_status_completed_to_on-hold",
 		"woocommerce_new_order",
 	);
 	$saved = array();
@@ -404,15 +437,34 @@ function spb_on_hold_order( $product_id ) {
 	}
 
 	try {
-		$order = wc_create_order();
-		$order->add_product( wc_get_product( $product_id ), 1, array( "subtotal" => 325, "total" => 325 ) );
-		$order->set_billing_email( "fixture-bridge@example.test" );
-		$order->set_billing_first_name( "Jordan" );
-		$order->set_billing_last_name( "Smith" );
-		$order->update_meta_data( "_spb_fixture", "on-hold" );
-		$order->calculate_totals();
-		$order->set_status( "on-hold" );
-		$order->save();
+		if ( $found ) {
+			// A re-run puts an order that a match completed back to its seed state
+			// (on-hold, unpaid, no transaction id), keeping its id.
+			$order = wc_get_order( (int) $found[0] );
+			if ( ! $order->has_status( "on-hold" ) ) {
+				$order->set_status( "on-hold" );
+			}
+			$order->set_transaction_id( "" );
+			$order->set_date_paid( null );
+			$order->set_date_completed( null );
+			$order->save();
+		} else {
+			$order = wc_create_order();
+			$order->add_product( wc_get_product( $product_id ), 1, array( "subtotal" => 325, "total" => 325 ) );
+			$order->set_billing_email( "fixture-bridge@example.test" );
+			$order->set_billing_first_name( "Jordan" );
+			$order->set_billing_last_name( "Smith" );
+			$order->update_meta_data( "_spb_fixture", "on-hold" );
+			$order->calculate_totals();
+			$order->set_status( "on-hold" );
+			$order->save();
+		}
+		// Seed state has no notes (a match and the status change each add one).
+		foreach ( wc_get_order_notes( array( "order_id" => $order->get_id() ) ) as $note ) {
+			if ( false === wc_delete_order_note( $note->id ) ) {
+				spb_fail( "order note delete failed: " . $note->id );
+			}
+		}
 	} finally {
 		foreach ( $saved as $hook => $callbacks ) {
 			$wp_filter[ $hook ] = $callbacks;
@@ -425,26 +477,25 @@ function spb_etransfer( $reference, $from_email, $from_name, $amount, $ts, $orde
 	global $wpdb;
 	$table = $wpdb->prefix . "spat_etransfer_logs";
 	$id    = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$table} WHERE reference_number=%s", $reference ) );
+	$row   = array(
+		"timestamp"        => $ts,
+		"from_email"       => $from_email,
+		"from_name"        => $from_name,
+		"amount"           => $amount,
+		"reference_number" => $reference,
+		"match_criteria"   => "fixture",
+		"order_id"         => $order_id,
+		"result"           => $result,
+	);
 	if ( $id ) {
+		// A re-run restores the seed state (id stays), whatever a match, a mismatch
+		// confirmation or a hide wrote: order_id, result and match_criteria
+		// (SPET_ETransfer_Admin::manual_match sets "Manual Match"), plus the rest.
+		// A null order_id is written as NULL by $wpdb->update().
+		spb_db_check( $wpdb->update( $table, $row, array( "id" => (int) $id ) ), "e-Transfer reset" );
 		return (int) $id;
 	}
-	$ok = $wpdb->insert(
-		$table,
-		array(
-			"timestamp"        => $ts,
-			"from_email"       => $from_email,
-			"from_name"        => $from_name,
-			"amount"           => $amount,
-			"reference_number" => $reference,
-			"match_criteria"   => "fixture",
-			"order_id"         => $order_id,
-			"result"           => $result,
-		)
-	);
-	if ( false === $ok ) {
-		fwrite( STDERR, "e-Transfer insert failed: " . $wpdb->last_error . "\n" );
-		exit( 1 );
-	}
+	spb_db_check( $wpdb->insert( $table, $row ), "e-Transfer insert" );
 	return (int) $wpdb->insert_id;
 }
 
@@ -536,20 +587,52 @@ if ( strtolower( (string) $co->get_billing_email() ) !== $change_email ) {
 	$co->set_billing_email( $change_email );
 	$co->save();
 }
+// The action adds an order note; the order is seeded without any.
+foreach ( wc_get_order_notes( array( "order_id" => $change_order ) ) as $note ) {
+	if ( false === wc_delete_order_note( $note->id ) ) {
+		spb_fail( "change-email order note delete failed: " . $note->id );
+	}
+}
 
-// Reset the waitlist rows to their seed state (ids stay), whatever an offer did.
+// Reset the waitlist rows to their seed state (ids stay), whatever an offer,
+// claim or resolution did: every column the lifecycle writes goes back.
 $wl_table = SPLM_Waitlist_Database::table_name();
-$wpdb->query( $wpdb->prepare( "UPDATE {$wl_table} SET status=%s, claim_token=NULL, offered_at=NULL, expires_at=NULL, offer_message=%s, dispatched_by=0, resolved_order_id=NULL WHERE id=%d", "queued", "", $wl_queued ) );
-$wpdb->update(
-	$wl_table,
-	array(
-		"status"     => "expired",
-		"offered_at" => gmdate( "Y-m-d H:i:s", time() - 3 * DAY_IN_SECONDS ),
-		"expires_at" => gmdate( "Y-m-d H:i:s", time() - DAY_IN_SECONDS ),
-	),
-	array( "id" => $wl_expired )
+$wl_base  = array(
+	"target_product_id" => $wl_product,
+	"claim_token"       => null,
+	"resolved_order_id" => null,
+	"dispatched_by"     => 0,
+	"offer_message"     => "",
 );
-wp_clear_scheduled_hook( SPLM_Waitlist_Expiry::EXPIRE_HOOK, array( $wl_queued ) );
+spb_db_check(
+	$wpdb->update(
+		$wl_table,
+		array_merge( $wl_base, array( "status" => "queued", "offered_at" => null, "expires_at" => null ) ),
+		array( "id" => $wl_queued )
+	),
+	"waitlist queued reset"
+);
+spb_db_check(
+	$wpdb->update(
+		$wl_table,
+		array_merge(
+			$wl_base,
+			array(
+				"status"     => "expired",
+				"offered_at" => gmdate( "Y-m-d H:i:s", time() - 3 * DAY_IN_SECONDS ),
+				"expires_at" => gmdate( "Y-m-d H:i:s", time() - DAY_IN_SECONDS ),
+			)
+		),
+		array( "id" => $wl_expired )
+	),
+	"waitlist expired reset"
+);
+if ( false === wp_clear_scheduled_hook( SPLM_Waitlist_Expiry::EXPIRE_HOOK, array( $wl_queued ) ) ) {
+	spb_fail( "waitlist queued hook clear failed" );
+}
+if ( false === wp_clear_scheduled_hook( SPLM_Waitlist_Expiry::EXPIRE_HOOK, array( $wl_expired ) ) ) {
+	spb_fail( "waitlist expired hook clear failed" );
+}
 
 echo wp_json_encode(
 	array(
