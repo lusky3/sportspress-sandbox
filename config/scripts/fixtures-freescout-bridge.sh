@@ -79,6 +79,11 @@ update_option(
 	)
 );
 
+function spb_fail( $message ) {
+	fwrite( STDERR, $message . "\n" );
+	exit( 1 );
+}
+
 // Fail fast on a failed $wpdb write ($res === false), like spb_term/spb_post.
 function spb_db_check( $res, $what ) {
 	global $wpdb;
@@ -456,7 +461,9 @@ function spb_on_hold_order( $product_id ) {
 		}
 		// Seed state has no notes (a match and the status change each add one).
 		foreach ( wc_get_order_notes( array( "order_id" => $order->get_id() ) ) as $note ) {
-			wc_delete_order_note( $note->id );
+			if ( false === wc_delete_order_note( $note->id ) ) {
+				spb_fail( "order note delete failed: " . $note->id );
+			}
 		}
 	} finally {
 		foreach ( $saved as $hook => $callbacks ) {
@@ -582,7 +589,9 @@ if ( strtolower( (string) $co->get_billing_email() ) !== $change_email ) {
 }
 // The action adds an order note; the order is seeded without any.
 foreach ( wc_get_order_notes( array( "order_id" => $change_order ) ) as $note ) {
-	wc_delete_order_note( $note->id );
+	if ( false === wc_delete_order_note( $note->id ) ) {
+		spb_fail( "change-email order note delete failed: " . $note->id );
+	}
 }
 
 // Reset the waitlist rows to their seed state (ids stay), whatever an offer,
@@ -618,8 +627,12 @@ spb_db_check(
 	),
 	"waitlist expired reset"
 );
-wp_clear_scheduled_hook( SPLM_Waitlist_Expiry::EXPIRE_HOOK, array( $wl_queued ) );
-wp_clear_scheduled_hook( SPLM_Waitlist_Expiry::EXPIRE_HOOK, array( $wl_expired ) );
+if ( false === wp_clear_scheduled_hook( SPLM_Waitlist_Expiry::EXPIRE_HOOK, array( $wl_queued ) ) ) {
+	spb_fail( "waitlist queued hook clear failed" );
+}
+if ( false === wp_clear_scheduled_hook( SPLM_Waitlist_Expiry::EXPIRE_HOOK, array( $wl_expired ) ) ) {
+	spb_fail( "waitlist expired hook clear failed" );
+}
 
 echo wp_json_encode(
 	array(
