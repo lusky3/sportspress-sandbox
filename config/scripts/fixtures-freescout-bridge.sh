@@ -237,8 +237,12 @@ function spb_order( $tag, $processed, $product_id, $bill_email = "fixture-bridge
 		$order = wc_get_order( (int) $found[0] );
 		if ( ! $order->get_items() ) {
 			$order->add_product( wc_get_product( $product_id ), 1 );
-			$order->save();
 		}
+		// A re-run restores the billing name too (a real SPAT re-run, or an
+		// older script version, may have left another one).
+		$order->set_billing_first_name( $first );
+		$order->set_billing_last_name( $last );
+		$order->save();
 		return (int) $found[0];
 	}
 	global $wp_filter;
@@ -267,7 +271,7 @@ function spb_order( $tag, $processed, $product_id, $bill_email = "fixture-bridge
 	return (int) $order->get_id();
 }
 
-function spb_log( $order_id, $action, $player_id, $links, $ts ) {
+function spb_log( $order_id, $action, $player_id, $links, $ts, $name = "Jordan Smith" ) {
 	global $wpdb;
 	$table  = $wpdb->prefix . "spat_registration_logs";
 	$exists = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$table} WHERE order_id=%d AND action=%s", $order_id, $action ) );
@@ -279,7 +283,7 @@ function spb_log( $order_id, $action, $player_id, $links, $ts ) {
 		array(
 			"timestamp"      => $ts,
 			"order_id"       => $order_id,
-			"customer_name"  => "Jordan Smith",
+			"customer_name"  => $name,
 			"player_id"      => $player_id,
 			"season"         => "S2026",
 			"position"       => "Player",
@@ -292,8 +296,12 @@ function spb_log( $order_id, $action, $player_id, $links, $ts ) {
 $processed = spb_order( "processed", true, $reg_product );
 spb_log( $processed, "player_created", $jordan, 1, "2026-09-03 14:02:00" );
 
-$attention = spb_order( "attention", false, $reg_product );
-spb_log( $attention, "name_rejected", null, 0, "2026-09-10 09:30:00" );
+// The attention order has a digit in its billing name, which the registration
+// name validation rejects (letters, spaces and a few punctuation marks only),
+// so a real re-run of it (SPPR_Admin::rerun) stays "name rejected", as its log
+// row says.
+$attention = spb_order( "attention", false, $reg_product, "fixture-bridge@example.test", "Jordan", "Sm1th" );
+spb_log( $attention, "name_rejected", null, 0, "2026-09-10 09:30:00", "Jordan Sm1th" );
 
 // Agent accounts: the FreeScout e2e admin (administrator) and an agent with no
 // WooCommerce capability, for the forbidden path. Passwords are random and
