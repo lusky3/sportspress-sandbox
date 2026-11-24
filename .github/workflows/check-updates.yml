@@ -29,10 +29,20 @@ jobs:
         sudo apt-get update -qq
         sudo apt-get install -y -qq skopeo jq
 
+        # Stay on the Dockerfile's PHP minor: a new PHP minor can drop tooling
+        # (8.6 images ship without pecl) or outpace extensions like xdebug, so
+        # moving PHP versions is a deliberate manual Dockerfile change.
+        PHP_MINOR=$(echo "$CURRENT" | grep -oE 'php[0-9]+\.[0-9]+' | sed 's/\./\\./')
+        if [ -z "$PHP_MINOR" ]; then
+          echo "Error: Failed to detect PHP version from tag '$CURRENT'"
+          exit 1
+        fi
+        echo "Restricting to $PHP_MINOR tags"
+
         # Fetch all WordPress tags using Skopeo
         LATEST=$(skopeo list-tags docker://docker.io/library/wordpress \
           | jq -r '.Tags[]' \
-          | grep -E '^[0-9]+\.[0-9]+\.[0-9]+-php[0-9]+\.[0-9]+-fpm-alpine$' \
+          | grep -E "^[0-9]+\.[0-9]+\.[0-9]+-${PHP_MINOR}-fpm-alpine\$" \
           | sort -Vr \
           | head -n 1)
 

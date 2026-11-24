@@ -1,5 +1,8 @@
 FROM wordpress:7.1.4-php8.5-fpm-alpine
 
+# PIE (PHP Installer for Extensions) replaces pecl, which PHP 8.6+ images no longer ship
+COPY --from=ghcr.io/php/pie:1.6.0-bin /pie /usr/bin/pie
+
 # Install MariaDB, wp-cli, nginx, and supervisord for process management
 RUN apk add --no-cache \
     wget \
@@ -10,12 +13,9 @@ RUN apk add --no-cache \
     bash \
     git \
     composer \
-    py3-pip \
     $PHPIZE_DEPS \
     linux-headers \
-    && pip3 install --only-binary :all: "setuptools==69.5.1" --break-system-packages \
-    && pecl install xdebug \
-    && docker-php-ext-enable xdebug \
+    && pie install xdebug/xdebug \
     && apk del $PHPIZE_DEPS linux-headers
 
 # Install wp-cli
