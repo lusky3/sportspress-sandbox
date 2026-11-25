@@ -1,4 +1,4 @@
-FROM wordpress:7.1.4-php8.5-fpm-alpine
+FROM wordpress:7.1.5-php8.5-fpm-alpine
 
 # PIE (PHP Installer for Extensions) replaces pecl, which PHP 8.6+ images no longer ship
 COPY --from=ghcr.io/php/pie:1.6.0-bin /pie /usr/bin/pie
